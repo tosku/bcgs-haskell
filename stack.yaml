@@ -1,0 +1,10 @@
+flags: {}
+extra-package-dbs: []
+packages:
+- '.'
+extra-deps:
+- Stack-0.3.2
+- mersenne-random-pure64-0.2.2.0
+- natural-numbers-0.1.2.0
+- text-1.2.2.1
+resolver: lts-8.17
