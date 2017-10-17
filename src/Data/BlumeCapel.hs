@@ -1,6 +1,6 @@
 {-|
 Module      : BlumeCapel
-Description : Ising model's realization and properties definitions
+Description : Blume Capel model's realization and properties definitions
 Copyright   : Thodoris Papakonstantinou, 2016
 License     : GPL-3
 Maintainer  : mail@tpapak.com
@@ -10,131 +10,148 @@ Portability : POSIX
 - Realization
 - get Ennergy of lattice
 - get Magnetization of lattice
-- Assign random spin configuration
 
  -}
+ {-# LANGUAGE MultiParamTypeClasses #-}
+ {-# LANGUAGE FunctionalDependencies #-}
+ {-# LANGUAGE FlexibleInstances #-}
+
 
 module Data.BlumeCapel
-    ( randomConfiguration
-    , getSpin
-    , flipSpin
-    , spinToInt
-    , showConfiguration
-    , flipConfiguration
-    , edgeEnergySTM
-    , edgeEnergy
-    , latticeEnergy
-    , isingRealization
-    , getMagnetization
-    , Realization
-    , Configuration
-    , Energy
-    , Magnetization
-    , getSpinSTM
-    , flipSpinSTM
+    ( Realization (..)
+    , UnimodalDisorder (..) -- ^ Gaussian (truncated [0,2]) distribution of random bonds
+    , BimodalDisorder (..) -- ^ Dichotomous distribution of random bonds 
+    , RBBC (..) -- ^ Random Bond Blume Capel
+    , lattice
+    , interactions
+    , energy
+    , BCSpin (..)
+    , Spin (..)
+    , Configuration (..)
+    , BCConfiguration (..)
     ) where
 
-import           Control.Concurrent            ()
-import           Control.Concurrent.STM
-import           Control.Monad                 (foldM, liftM)
-import           Control.Monad.Par
-import           Control.Monad.Par.IO          as ParIO
-import           Control.Monad.Trans           (MonadIO, liftIO)
-import qualified Data.Vector                   as V
-import           System.Random.Mersenne.Pure64 as MT
+import Data.List
+import Data.Maybe
+import qualified Data.Vector as V
 
-import           Lattice
-import           Grid
+import Data.PRNG
+import Data.PRNG.MTRNG
+import Data.Grid
 
-type Spin = Bool -- probably more memory efficient
-type Configuration = V.Vector (TVar Spin)
 type Energy = Double
-type Magnetization = Int
-type J = Double -- Exchange interaction
-type Realization = Edge -> J
-type Seed = Int
+type Mag = Int
 
-data (Lattice a) => IsingReplica a 
-    = IsingReplica
-      { _lattice :: a
-      , _realization :: Realization
-      , _configuration :: IO Configuration
-      , _energy :: IO Energy
-      , _magnetization :: IO Magnetization
-      , _siteEnergy :: IO Energy 
-      , _bondEnergy :: IO Energy 
-      } 
+class Spin s where
+  project :: (Num p) => s -> s -> p
 
-ising :: Lattice -> Seed -> (IsingReplica Lattice)
-ising l s = IsingReplica 
-  { _lattice = l
-  , _realization = isingRealization
-  , _configuration = randomConfiguration (pureMT s) (n l)
-  , _energy = latticeEnergy edges isingRealization
-  }
-isingRealization :: Realization
-isingRealization _ = 1;
+newtype IsingSpin = IsingSpin Bool deriving (Show, Eq, Ord) -- probably more memory efficient
+instance Spin IsingSpin where
+  project a b 
+    | a == b =  1
+    | a /= b = -1
 
-edgeEnergySTM :: Edge -> Realization -> Configuration -> STM Energy
-edgeEnergySTM e real conf = {-# SCC "edge_energy" #-} do
-  let (s,t) = e
-  spinSource <- fmap (fromIntegral . spinToInt) (getSpinSTM s conf)
-  spinTarget <- fmap (fromIntegral . spinToInt) (getSpinSTM t conf)
-  return $! - spinSource * spinTarget * real e
+data BCSpin = Up 
+            | Zero 
+            | Down 
+  deriving (Eq, Ord, Show, Read, Bounded, Enum)
 
-edgeEnergyUnsafe :: Edge -> Realization -> Configuration -> IO Energy
-edgeEnergyUnsafe e real conf = do
-  let (s,t) = e
-  spinSource <- fmap (fromIntegral . spinToInt) (getSpinUnsafe s conf)
-  spinTarget <- fmap (fromIntegral . spinToInt) (getSpinUnsafe t conf)
-  return $! - spinSource * spinTarget * real e
+instance Spin BCSpin where
+  project a b
+    | a == Up && b == Up = 1
+    | a == Down && b == Down = 1
+    | a == Up && b == Down = -1
+    | a == Down && b == Up = -1
+    | otherwise = 0
 
-edgeEnergy :: Edge -> Realization -> Configuration -> IO Energy
-edgeEnergy e real conf =  atomically $ edgeEnergySTM e real conf
+class Spin s => Configuration c s | c -> s where
+  configuration :: c -> V.Vector s
+  size :: c -> Int
+  spin :: c -> Vertex -> s
+  magnetization :: c -> Mag
 
-latticeEnergy :: [Edge] -> Realization -> Configuration -> IO Energy
-latticeEnergy edges real conf = do
-  a <- mapM (\e -> edgeEnergyUnsafe e real conf) edges
-  let b = sum a
-  return $! b
+data BCConfiguration = BCConfiguration (V.Vector BCSpin)
 
-getMagnetization :: Configuration -> IO Magnetization
-getMagnetization = V.foldM' (\x s -> (fmap ((+ x) . spinToInt) . readTVarIO) s) 0
+instance Configuration BCConfiguration BCSpin where
+  configuration (BCConfiguration c) = c
+  size c = V.length $ configuration c
+  spin c v = (configuration c) V.! (v - 1)
+  magnetization c = foldl (\acc s -> acc + project Up s) 0 (configuration c)
 
-randomBools :: Int -> PureMT -> [Bool]
-randomBools 0 _ = []
-randomBools n g = b:(randomBools (n-1) g')
-  where (d,g') = MT.randomDouble g
-        b = d > 0.5
+type Delta = Double
 
-randomConfigurationSTM :: PureMT -> Int -> STM Configuration
-randomConfigurationSTM g x = V.mapM newTVar (V.fromList $ randomBools x g)
-randomConfiguration :: PureMT -> Int -> IO Configuration
-randomConfiguration g x = atomically $ randomConfigurationSTM g x
+type DisorderStrength = Double -- ^ Should be between [0,1]
+type J = Edge -> Energy -- ^ Exchange interaction
+type Js = V.Vector Energy
 
-getSpinSTM :: Vertex -> Configuration -> STM Spin
-getSpinSTM v conf = readTVar $ conf V.! (v-1)
+isingJ :: J
+isingJ _ = 1
 
-getSpinUnsafe :: Vertex -> Configuration -> IO Spin
-getSpinUnsafe v conf = readTVarIO $ conf V.! (v-1)
+class Disorder r where
+  distribution :: r -> Natural -> Js
 
-getSpin :: Vertex -> Configuration -> IO Spin
-getSpin v conf = atomically $ getSpinSTM v conf
+data BimodalDisorder = BimodalDisorder Seed DisorderStrength
 
-flipSpinSTM :: Vertex -> Configuration -> STM ()
-flipSpinSTM v conf = do
-  s <- getSpinSTM v conf
-  writeTVar (conf V.! (v - 1)) $ not s
+instance Disorder BimodalDisorder where
+  distribution (BimodalDisorder s d) n = dichotomousJs n s d
 
-flipSpin :: Vertex -> Configuration -> IO ()
-flipSpin v conf = do
-  atomically $ flipSpinSTM v conf
+dichotomousJs :: Natural -> Seed -> DisorderStrength -> Js
+dichotomousJs n s p = do
+  let p' = case (p < 0) || (p > 1) of
+           True -> 1
+           False -> p
+  let jWeak = 1.0 - p'
+  let jStrong = 2.0 - jWeak
+  let n' = fromIntegral n 
+  let js = V.replicate n' jStrong
+  let weakindxs = zip (sample (getRNG s :: MTRNG) (quot n' 2) [0 .. n'-1] ) (replicate (quot n' 2) jWeak)
+  js V.// weakindxs
 
-showConfiguration :: Configuration -> IO [Int]
-showConfiguration c = mapM (\v -> spinToInt <$> getSpin v c) [1 .. (length c)]
+data UnimodalDisorder = UnimodalDisorder Seed DisorderStrength
 
-flipConfiguration :: Configuration -> IO [()]
-flipConfiguration c = mapM (`flipSpin` c) [1 .. (length c)]
+instance Disorder UnimodalDisorder where
+  distribution (UnimodalDisorder s d) n = normalJs n s d
 
-spinToInt :: Spin -> Int
-spinToInt s = if s then 1 else -1
+normalJs :: Natural -> Seed -> DisorderStrength -> Js
+normalJs n s p = do
+  let n' = fromIntegral n
+  let rng = getRNG s :: MTRNG
+  let μ = 1
+  let σ = p
+  let f = 0
+  let t = 2
+  let js = V.fromList $ truncatedNormalSample rng μ σ f t n'
+  js
+
+class (Disorder d, Lattice l) => Realization d l where
+  getlattice :: d -> l -> l
+  getinteractions :: d -> l -> Js
+  getinteraction :: d -> l -> J
+  hamiltonian :: d -> l -> Delta -> BCConfiguration -> Maybe Energy
+
+instance (Disorder d, Lattice l) => Realization d l where 
+  getlattice d l = l 
+  getinteractions d l = distribution d (numEdges l)
+  getinteraction d l e = (getinteractions d l) V.! ((fromJust (edgeIx l e)) - 1)
+  hamiltonian d l f c = case Data.BlumeCapel.size c == fromIntegral (Data.Grid.size l) of
+                          True -> let bondenergy = foldl' (\ac (i,e)-> 
+                                                  let (f,t) = toTuple e 
+                                                      projc conf = project (spin conf f) (spin conf t)
+                                                      be = (projc c) * (getinteractions d l V.! (i - 1))
+                                                   in ac - be
+                                               ) 0 $ zip [1 .. (fromIntegral (numEdges l) :: Int)] (edges l) 
+                                      siteenergy = foldl' (\ac v -> ac + (project (spin c v) (spin c v)) * f) 0 (vertices l)
+                                   in pure $ bondenergy + siteenergy
+                          False -> Nothing
+
+
+data (Disorder d, Lattice l) => RBBC d l = RBBC d l
+                                                
+lattice :: (Disorder d, Lattice l) => RBBC d l -> l
+lattice (RBBC d l) = getlattice d l
+
+interactions :: (Disorder d, Lattice l) => RBBC d l -> Js
+interactions (RBBC d l) = getinteractions d l
+
+energy :: (Disorder d, Lattice l) => RBBC d l -> Delta -> BCConfiguration -> Maybe Energy
+energy (RBBC d l) f c = hamiltonian d l f c

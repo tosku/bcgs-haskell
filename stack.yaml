@@ -2,9 +2,14 @@ flags: {}
 extra-package-dbs: []
 packages:
 - '.'
+- location: 
+    git: https://github.com/tosku/prng.git
+    commit: ca95453c310bbc361c89c098bd681955b007fb35
 extra-deps:
 - Stack-0.3.2
 - mersenne-random-pure64-0.2.2.0
 - natural-numbers-0.1.2.0
 - text-1.2.2.1
-resolver: lts-8.17
+- prng-0.1.0.0
+- Histogram-0.1.0.2
+resolver: lts-9.5

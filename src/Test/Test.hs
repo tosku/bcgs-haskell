@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Test.Test 
     ( Test
-    , reportTest
+    , runTest
     , reportTests
     , testPassed
     , testFailed
@@ -13,6 +13,7 @@ import Data.Grid
 import Data.Tuple
 import Data.Lattice
 import System.Console.ANSI
+import System.Exit
 
 data Test = Test
   { _name :: String
@@ -32,8 +33,8 @@ testFailed t f = Test
   , _outcome = Left f
   }
   
-reportTest :: Test -> IO ()
-reportTest t = do
+runTest :: Test -> IO Test
+runTest t = do
   case t ^. outcome of
     Left err -> do
       putStr $ t ^. name 
@@ -44,21 +45,26 @@ reportTest t = do
       setSGR [Reset]
     Right succe -> do
       putStr $ t ^. name 
+      putStr $ ": " ++ succe 
       setSGR [SetColor Foreground Vivid Green]
       putStrLn " ✓"
       setSGR [Reset]
+  return t
 
-reportTests :: [Test] -> String
+reportTests :: [Test] -> IO ()
 reportTests ts = do
-  let lt = length ts
+  tests <- sequence $ map runTest ts
+  let lt = length tests
   let passedtests = filter 
                     (\test -> case test ^. outcome of 
                     Left _ -> False
                     Right _ -> True)
-                    ts
+                    tests
   let failedTests = lt - length passedtests
   let passedAll = length passedtests == lt
-  let report = case passedAll of
-               True -> "Passed all " ++ (show lt) ++ "!"
-               False -> "Failed "  ++ (show failedTests)
-  show report
+  case passedAll of
+       True -> do
+         putStrLn $ "Passed all " ++ (show lt) ++ " tests!! 🎉"
+       False -> do
+         putStrLn $ "Failed "  ++ (show failedTests) ++ " test(s) 😣"
+         exitFailure
