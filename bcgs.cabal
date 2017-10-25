@@ -15,12 +15,17 @@ extra-source-files:  README.md
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Data.Lattice
+  exposed-modules:     Data.Graph
+                     , Data.Graph.BFS
+                     , Test.Graph.BFS
+                     , Data.Lattice
                      , Test.Test
                      , Data.Grid
                      , Test.Grid
                      , Data.BlumeCapel
                      , Test.BlumeCapel
+                     , Data.BlumeCapel.MaxFlow
+                     , Test.BlumeCapel.MaxFlow
   build-depends:       base >= 4.7 && < 5
                      , ansi-terminal >= 0.6.3.1
                      , mtl >= 2.2.1
@@ -30,7 +35,6 @@ library
                      , vector
                      , lens >= 4.15.1
                      , stm >= 2.4.4.1
-                     , Stack >= 0.3.2
                      , template-haskell >= 2.11.1.0
                      , monad-par >= 0.3.4.8
                      , containers >= 0.5.7.1
@@ -39,6 +43,8 @@ library
                      , async >= 2.1.1
                      , aeson
                      , prng >= 0.1.0.0
+                     , either-unwrap >= 1.1
+                     , fgl >= 5.5.3.1
   default-language:    Haskell2010
 
 executable bcgs-exe
@@ -51,17 +57,19 @@ executable bcgs-exe
                      , random
                      , mersenne-random-pure64 >= 0.2.0.5
                      , stm >= 2.4.4.1
-                     , Stack >= 0.3.2
                      , parallel >= 3.2.1.0
                      , lens >= 4.15.1
                      , monad-par >= 0.3.4.8
                      , containers >= 0.5.7.1
+                     , vector
                      , unix
                      , async >= 2.1.1
                      , bytestring
                      , aeson
                      , prng >= 0.1.0.0
+                     , either-unwrap >= 1.1
                      , gnuplot >= 0.5.4.2
+                     , fgl >= 5.5.3.1
   default-extensions:  DeriveGeneric
   default-language:    Haskell2010
 
@@ -75,7 +83,7 @@ test-suite bcgs-test
                      , random
                      , lens >= 4.15.1
                      , bcgs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 benchmark bcgs-bench-all
@@ -87,7 +95,7 @@ benchmark bcgs-bench-all
                      , criterion
                      , vector
                      , bcgs
-  ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -v3 -O2 -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 source-repository head

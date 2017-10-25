@@ -15,7 +15,8 @@ fastTests = [ test2dpbc1
            , test3dpbc1
            , test3dpbc2
            , test4dpbc1
-           , test3dedges
+           , test2dedges
+           , testforwards
            , vertexToCVertexToVertex
            , testEdge
            ]
@@ -67,12 +68,23 @@ test4dpbc1 = do
     True -> testPassed name "passed!"
     False -> testFailed name $ (bimap <$> id <*> id) show (neigh1, out)
 
-test3dedges :: Test
-test3dedges = do
+test2dedges :: Test
+test2dedges = do
   let name = "Edges of pbcsql L=3 D=2"
       expe = [(1,2),(1,4),(2,3),(2,5),(3,1),(3,6),(4,5),(4,7),(5,6),(5,8),(6,4),(6,9),(7,8),(7,1),(8,9),(8,2),(9,7),(9,3)]
       out = map toTuple $ edges $ (PBCSquareLattice  (3 :: L) (2 :: D))
   case out == expe of
+    True -> testPassed name "passed!"
+    False -> testFailed name $ (bimap <$> id <*> id) show (expe, out)
+
+
+testforwards :: Test
+testforwards = do
+  let name = "Edges of pbcsql L=3 D=2"
+      lat  = (PBCSquareLattice  (3 :: L) (2 :: D))
+      expe = [(1,2),(1,4),(2,3),(2,5),(3,1),(3,6),(4,5),(4,7),(5,6),(5,8),(6,4),(6,9),(7,8),(7,1),(8,9),(8,2),(9,7),(9,3)]
+      out = foldl (\ac v -> foldl (\ac e -> e:ac) ac (map toTuple $ forwardEdges lat v)) [] (vertices lat)
+  case all id (map (\e -> elem e expe) out) of
     True -> testPassed name "passed!"
     False -> testFailed name $ (bimap <$> id <*> id) show (expe, out)
 
@@ -95,7 +107,7 @@ testEdge = do
       d    = (3 :: D)
       lattice = (PBCSquareLattice l d)
       es = edges lattice
-      eids = map (edgeIx lattice) es
+      eids = map (pbcEdgeIx l d) es
       expe :: [Maybe Int]
       expe = map pure [1..length es]
   case eids == expe of

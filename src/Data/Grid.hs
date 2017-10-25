@@ -23,10 +23,13 @@ module Data.Grid
     , Edge
     , fromTuple
     , toTuple
+    , Graph (..)
     , Lattice (..)
     , vertexToCVertex
     , cVertexToVertex
     , PBCSquareLattice (..)
+    , pbcEdgeIx
+    , mapEdgeIndx
     ) where
 
 import qualified Data.Vector as V
@@ -49,15 +52,17 @@ class SquareLattice l where
 -- (C_L) => (C_L)▢^d
 data PBCSquareLattice = PBCSquareLattice L D
 
-instance Lattice PBCSquareLattice where
-  size (PBCSquareLattice l d) = gridN l d
-  neighbors (PBCSquareLattice l d) = pbcNeighbors l d
-  adjacentEdges (PBCSquareLattice l d) = pbcAdjacentEdges l d
+instance Graph PBCSquareLattice where
   vertices (PBCSquareLattice l d) = gridVertices l d
   edges (PBCSquareLattice l d) = pbcEdges l d
+  neighbors (PBCSquareLattice l d) = pbcNeighbors l d
+  adjacentEdges (PBCSquareLattice l d) = pbcAdjacentEdges l d
+
+instance Lattice PBCSquareLattice where
+  size (PBCSquareLattice l d) = gridN l d
   numEdges (PBCSquareLattice l d) = d * (gridN l d)
   edgeIx (PBCSquareLattice l d) = pbcEdgeIx l d
-  {-ixEdge (PBCSquareLattice l d) = pbcIxEdges l d-}
+  forwardEdges (PBCSquareLattice l d) = pbcForwardEdges l d
   
 instance SquareLattice PBCSquareLattice where
   linearSize (PBCSquareLattice l d) = l
@@ -93,6 +98,8 @@ pbcNeighbor v l d r  | r == Forward =
                         then v - innerOffset l d
                         else v - pbcOffset l d
 
+{-# INLINE pbcNeighbor #-}
+
 innerOffset :: L -> D -> Vertex
 innerOffset l' d' = l^(d - 1)
   where l = fromEnum l'
@@ -121,6 +128,7 @@ vertexToCVertex l' d' v = do
   out
   where l = fromEnum l'
         d = fromEnum d'
+{-# INLINE vertexToCVertex #-}
 
 -- | The reverse function of vertexToCVertex
 cVertexToVertex :: L -> D -> CVertex -> Vertex
@@ -153,6 +161,11 @@ isEdgeInCycle l' (Edge a b)
   | otherwise = False
   where l = fromEnum l'
 
+-- | Returns tuple (edge) giving forward and backward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
+pbcForwardEdges :: L -> D -> Vertex -> [Edge]
+pbcForwardEdges l d v = fmap (\d -> Edge v (pbcNeighbor v l d Forward)) [1 .. d]
+{-# INLINE pbcForwardEdges #-}
+
 
 -- | Returns tuple (edge) giving forward and backward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
 pbcAdjacentEdges :: L -> D -> Vertex -> [Edge]
@@ -167,21 +180,18 @@ pbcEdges :: L -> D -> [Edge]
 pbcEdges l d = (\v j-> Edge v (pbcNeighbor v l j Forward)) <$> gridVertices l d <*> [1 .. d]
 
 -- | Index of edge of a grid with periodic boundary conditions
+-- Very inefficient, better use Data.Map for lookups.
 pbcEdgeIx :: L -> D -> Edge -> Maybe Int
 pbcEdgeIx l d e = do
   let Edge s t = e
       a = vertexToCVertex l d s
       b = vertexToCVertex l d t
       (((a',b'),di),dist) = diff (CEdge a b)
-  if dist == 1 then
-    if forwardVertexInCycle l a' == b' then
-      Just $ ((s-1)*d') + di
-      -- Just di
-      else
-      Just $ ((t-1)*d') + di
-      -- Just di
-  else
-    Nothing
+  case dist == 1 of
+    True -> case forwardVertexInCycle l a' == b' of
+              True -> Just $ ((s-1)*d') + di
+              False -> Just $ ((t-1)*d') + di
+    False -> Nothing
   where
     d' = fromEnum d
     step (((a',b'),di'), ds) ((s,t),di)
@@ -190,3 +200,4 @@ pbcEdgeIx l d e = do
     diff :: CEdge -> (((Vertex,Vertex),Int),Int)
     diff (CEdge a b) = foldl step (((0,0),0),0) $ zip (zip a b) [1..d']
 
+{-# INLINE pbcEdgeIx #-}

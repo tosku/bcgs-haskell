@@ -2,6 +2,7 @@ module Test.BlumeCapel where
 
 import qualified Data.Vector  as V
 import Data.List
+import Data.Either.Unwrap
 import Data.Maybe
 
 import Test.Test
@@ -25,9 +26,10 @@ test1 = do
       d    = 3
       dis  = BimodalDisorder 901 8.1
       latt = PBCSquareLattice l d
-      real = RBBC dis latt
+      delta = 1.8
+      real = RBBC dis latt delta
       expe = 0.5
-      nume = fromIntegral (numEdges (lattice real))
+      nume = fromIntegral (numEdges real)
       js   = interactions real
       out  = fromIntegral (V.length (V.filter (\j -> j >= 1) $ js)) / nume
   case out == expe && (V.all (\x -> (x>=0)) js) of
@@ -39,9 +41,10 @@ test2 = do
   let name = "Gaussian disorder Random Bond Blume Capel - Sum of Js should be 1"
       l    = (100 :: L)
       d    = (3 :: D)
-      real = RBBC (UnimodalDisorder 191 0.1) (PBCSquareLattice l d)
+      delta = 1.8
+      real = RBBC (UnimodalDisorder 191 0.1) (PBCSquareLattice l d) delta
       expe = 1
-      nume = fromIntegral (numEdges (lattice real))
+      nume = fromIntegral (numEdges real)
       js = interactions real
       out = (V.sum js) / nume
   case (abs(out - 1) < 0.0001) && (V.all (\x -> (x>=0) && (x<=2)) js) of
@@ -51,14 +54,15 @@ test2 = do
 test3 :: Test
 test3 = do
   let name = "read Js from realization"
-      l    = (30 :: L)
+      l    = (5 :: L)
       d    = (3 :: D)
       lat  = (PBCSquareLattice l d)
       dis = (UnimodalDisorder 191 0.1)
-      real = RBBC dis lat
-      nume = fromIntegral (numEdges (lattice real))
+      delta = 1.8
+      real = RBBC dis lat delta
+      nume = fromIntegral (numEdges real)
       js = interactions real
-      out = map (getinteraction dis lat) (edges lat)
+      out = map (fromJust . (interaction real)) (edges lat)
   case out == V.toList js of
     True -> testPassed name $ show (V.sum js) ++ "passed!"
     False -> testFailed name $ (,) (show (sum out)) (show (V.sum js))
@@ -69,16 +73,19 @@ test4 = do
       l    = (50 :: L)
       d    = (3 :: D)
       delta = 1
-      real = RBBC (UnimodalDisorder 191 0.1) (PBCSquareLattice l d)
+      real = RBBC (UnimodalDisorder 191 0.1) (PBCSquareLattice l d) delta
       expe = 0
-      nume = fromIntegral (numEdges (lattice real))
+      nume = fromIntegral (numEdges real)
       js = interactions real
-      n  = fromIntegral (Data.Grid.size (lattice real))
+      n  = fromIntegral (size real)
       conf = BCConfiguration (V.fromList $ replicate n Zero)
-      out = fromJust $ energy real delta conf
-  case abs(out) < 0.000001 of
-    True -> testPassed name $ show (magnetization conf) ++ "passed!"
-    False -> testFailed name $ (,) (show expe) ((show out) ++" "++ show (magnetization conf))
+      out = energy real conf
+  case out of 
+    Right en -> 
+      case abs(en) < 0.000001 of
+        True -> testPassed name $ show (sumconfiguration conf) ++ "passed!"
+        False -> testFailed name $ (,) (show expe) ((show out) ++" "++ show (sumconfiguration conf))
+    Left err -> testFailed name $ (,) (show expe) (show err)
 
 test5 :: Test
 test5 = do
@@ -86,13 +93,13 @@ test5 = do
       l    = (50 :: L)
       d    = (3 :: D)
       delta = 3
-      real = RBBC (BimodalDisorder 191 0.1) (PBCSquareLattice l d)
+      real = RBBC (BimodalDisorder 191 0.1) (PBCSquareLattice l d) delta
       expe = 0
-      nume = fromIntegral (numEdges (lattice real))
+      nume = fromIntegral (numEdges real)
       js = interactions real
-      n  = fromIntegral (Data.Grid.size (lattice real))
+      n  = fromIntegral (size real)
       conf = BCConfiguration (V.fromList $ replicate n Up)
-      out = fromJust $ energy real delta conf
+      out = fromRight (energy real conf)
   case abs(out) < 0.000001 of
-    True -> testPassed name $ show (magnetization conf) ++ "passed!"
-    False -> testFailed name $ (,) (show expe) ((show out) ++" "++ show (magnetization conf))
+    True -> testPassed name $ show (sumconfiguration conf) ++ "passed!"
+    False -> testFailed name $ (,) (show expe) ((show out) ++" "++ show (sumconfiguration conf))

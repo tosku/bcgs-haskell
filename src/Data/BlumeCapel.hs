@@ -19,12 +19,12 @@ Portability : POSIX
 
 module Data.BlumeCapel
     ( Realization (..)
+    , Disorder (..)
     , UnimodalDisorder (..) -- ^ Gaussian (truncated [0,2]) distribution of random bonds
     , BimodalDisorder (..) -- ^ Dichotomous distribution of random bonds 
+    , Delta -- ^ Crysta field strength Double
     , RBBC (..) -- ^ Random Bond Blume Capel
-    , lattice
-    , interactions
-    , energy
+    , crystalField
     , BCSpin (..)
     , Spin (..)
     , Configuration (..)
@@ -33,6 +33,7 @@ module Data.BlumeCapel
 
 import Data.List
 import Data.Maybe
+import Data.Either
 import qualified Data.Vector as V
 
 import Data.PRNG
@@ -66,17 +67,17 @@ instance Spin BCSpin where
 
 class Spin s => Configuration c s | c -> s where
   configuration :: c -> V.Vector s
-  size :: c -> Int
+  numSpins :: c -> Int
   spin :: c -> Vertex -> s
-  magnetization :: c -> Mag
+  sumconfiguration :: c -> Mag
 
 data BCConfiguration = BCConfiguration (V.Vector BCSpin)
 
 instance Configuration BCConfiguration BCSpin where
   configuration (BCConfiguration c) = c
-  size c = V.length $ configuration c
+  numSpins c = V.length $ configuration c
   spin c v = (configuration c) V.! (v - 1)
-  magnetization c = foldl (\acc s -> acc + project Up s) 0 (configuration c)
+  sumconfiguration c = foldl (\acc s -> acc + project Up s) 0 (configuration c)
 
 type Delta = Double
 
@@ -115,43 +116,61 @@ instance Disorder UnimodalDisorder where
 normalJs :: Natural -> Seed -> DisorderStrength -> Js
 normalJs n s p = do
   let n' = fromIntegral n
-  let rng = getRNG s :: MTRNG
-  let μ = 1
-  let σ = p
-  let f = 0
-  let t = 2
-  let js = V.fromList $ truncatedNormalSample rng μ σ f t n'
-  js
+      rng = getRNG s :: MTRNG
+      μ = 1
+      σ = p
+      f = 0
+      t = 2
+      js = V.fromList $ truncatedNormalSample rng μ σ f t n'
+   in js
 
-class (Disorder d, Lattice l) => Realization d l where
-  getlattice :: d -> l -> l
-  getinteractions :: d -> l -> Js
-  getinteraction :: d -> l -> J
-  hamiltonian :: d -> l -> Delta -> BCConfiguration -> Maybe Energy
+class Realization r where
+  interactions :: r -> Js
+  interaction :: r -> Edge -> Maybe Energy
+  energy :: (Configuration c s) => r -> c -> Either String Energy
+  magnetization :: (Configuration c s) => r -> c -> Either String Mag
 
-instance (Disorder d, Lattice l) => Realization d l where 
-  getlattice d l = l 
-  getinteractions d l = distribution d (numEdges l)
-  getinteraction d l e = (getinteractions d l) V.! ((fromJust (edgeIx l e)) - 1)
-  hamiltonian d l f c = case Data.BlumeCapel.size c == fromIntegral (Data.Grid.size l) of
-                          True -> let bondenergy = foldl' (\ac (i,e)-> 
-                                                  let (f,t) = toTuple e 
-                                                      projc conf = project (spin conf f) (spin conf t)
-                                                      be = (projc c) * (getinteractions d l V.! (i - 1))
-                                                   in ac - be
-                                               ) 0 $ zip [1 .. (fromIntegral (numEdges l) :: Int)] (edges l) 
-                                      siteenergy = foldl' (\ac v -> ac + (project (spin c v) (spin c v)) * f) 0 (vertices l)
-                                   in pure $ bondenergy + siteenergy
-                          False -> Nothing
+data (Disorder d, Lattice l) => RBBC d l = RBBC d l Delta
+
+instance (Disorder d, Lattice l) => Graph (RBBC d l) where 
+  vertices (RBBC d l f) = vertices l
+  edges (RBBC d l f) = edges l
+  neighbors (RBBC d l f) = neighbors l
+  adjacentEdges (RBBC d l f) = adjacentEdges l
+
+instance (Disorder d, Lattice l) => Lattice (RBBC d l) where 
+  size (RBBC d l f) = size l
+  numEdges (RBBC d l f) = numEdges l
+  forwardEdges (RBBC d l f) = forwardEdges l
+  edgeIx (RBBC d l f) = edgeIx l
+  --edgeIx (RBBC d l f) = mapEdgeIndx l
 
 
-data (Disorder d, Lattice l) => RBBC d l = RBBC d l
-                                                
-lattice :: (Disorder d, Lattice l) => RBBC d l -> l
-lattice (RBBC d l) = getlattice d l
+crystalField ::(Disorder d, Lattice l) => RBBC d l -> Delta
+crystalField (RBBC d l f) = f
 
-interactions :: (Disorder d, Lattice l) => RBBC d l -> Js
-interactions (RBBC d l) = getinteractions d l
+rbbcInteraction r e = let meidx = edgeIx r e
+                          js = interactions r
+                       in case meidx of 
+                            Just eidx -> Just $ js V.! (eidx - 1)
+                            Nothing -> Nothing
 
-energy :: (Disorder d, Lattice l) => RBBC d l -> Delta -> BCConfiguration -> Maybe Energy
-energy (RBBC d l) f c = hamiltonian d l f c
+rbbcInteractions (RBBC d l f) = distribution d (numEdges l)
+
+                 
+instance (Disorder d, Lattice l) => Realization (RBBC d l) where 
+  interaction = rbbcInteraction
+  interactions = rbbcInteractions
+  energy r c = case numSpins c == fromIntegral (size r) of
+                 True -> let bondenergy = foldl' (\ac (i,e)-> 
+                                   let (f,t) = toTuple e 
+                                       projc conf = project (spin conf f) (spin conf t)
+                                       be = (projc c) * (interactions r V.! (i - 1))
+                                   in ac - be
+                               ) 0 $ zip [1 .. (fromIntegral (numEdges r) :: Int)] (edges r) 
+                             siteenergy = foldl' (\ac v -> ac + (project (spin c v) (spin c v)) * (crystalField r)) 0 (vertices r)
+                         in Right $ bondenergy + siteenergy
+                 False -> Left "Error: spin configuration not compatible with lattice"
+  magnetization r c = case numSpins c == fromIntegral (size r) of
+                   True -> Right $ sumconfiguration c
+                   False -> Left "Error: spin configuration not compatible with lattice"

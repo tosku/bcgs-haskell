@@ -17,41 +17,26 @@ module Data.Lattice
     , Edge (..)
     , fromTuple
     , toTuple
+    , reverseEdge
     , Lattice (..)
+    , Graph (..)
+    , mapEdgeIndx
+    , edgeMap
     ) where
 
-import Data.Traversable
 import Data.Natural
+import qualified Data.Map.Strict as M
 
-type Vertex = Int
+import Data.Graph
 
-data Edge = Edge Vertex Vertex 
-
-from :: Edge -> Vertex
-from (Edge s t) = s
-
-to :: Edge -> Vertex
-to (Edge s t) = t
-
-fromTuple :: (Vertex, Vertex) -> Edge
-fromTuple (s,t) = Edge s t
-
-toTuple :: Edge -> (Vertex, Vertex)
-toTuple (Edge s t) = (s,t)
-
-instance Show Edge where
- show (Edge s t) = "(" ++ show s ++ "," ++ show t ++ ")"
-
-instance Eq Edge where
-  a == b = (from a == from b && to a == to b)|| 
-           (from a == to b && from a == to b)
-
-class Lattice l where 
+class Graph l => Lattice l where 
   size :: l -> Natural
-  vertices :: l -> [Vertex]
-  edges :: l -> [Edge]
   numEdges :: l -> Natural
+  forwardEdges :: l -> Vertex -> [Edge] -- ^ for traversing once the edges by folding onto vertices
   edgeIx :: l -> Edge -> Maybe Int
-  -- ixEdge :: l -> Int -> Maybe Edge
-  neighbors :: l -> Vertex -> [Vertex] 
-  adjacentEdges :: l -> Vertex -> [Edge] 
+
+edgeMap :: Lattice l => l -> M.Map Edge Int
+edgeMap l = M.fromList (zip (edges l) [1 .. fromIntegral $ numEdges l]) :: M.Map Edge Int
+
+mapEdgeIndx :: Lattice l => l -> Edge -> Maybe Int
+mapEdgeIndx l e = M.lookup e $ edgeMap l
