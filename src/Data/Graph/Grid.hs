@@ -15,7 +15,7 @@ following conventional vertex labeling.
 - d: dimensionality (2: square, 3: cubic, >3: hypercubic)
  -}
 
-module Data.Grid
+module Data.Graph.Grid
     ( Natural
     , L
     , D
@@ -25,6 +25,7 @@ module Data.Grid
     , toTuple
     , Graph (..)
     , Lattice (..)
+    , adjacentEdges
     , vertexToCVertex
     , cVertexToVertex
     , PBCSquareLattice (..)
@@ -34,7 +35,8 @@ module Data.Grid
 
 import qualified Data.Vector as V
 
-import Data.Lattice
+import Data.Graph
+import Data.Graph.Lattice
 
 type L = Natural
 type D = Natural
@@ -56,7 +58,6 @@ instance Graph PBCSquareLattice where
   vertices (PBCSquareLattice l d) = gridVertices l d
   edges (PBCSquareLattice l d) = pbcEdges l d
   neighbors (PBCSquareLattice l d) = pbcNeighbors l d
-  adjacentEdges (PBCSquareLattice l d) = pbcAdjacentEdges l d
 
 instance Lattice PBCSquareLattice where
   size (PBCSquareLattice l d) = gridN l d

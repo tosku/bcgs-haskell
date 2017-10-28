@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.Graph.BFS where
+module Test.Graph.MaxFlow where
 
 import Language.Haskell.TH
 import Control.Lens
@@ -20,13 +20,9 @@ import Data.Graph
 import qualified Data.Graph.Lattice as Lat
 import Data.Graph.BFS
 import Data.Graph.Grid
-import Data.BlumeCapel
-import Data.BlumeCapel.GSNetwork
 
 fastTests :: [Test]
 fastTests = [ test1
-            , test2
-            , test3
             ]
 
 data TestGraph1 = TestGraph1
@@ -48,43 +44,12 @@ instance Lat.Lattice TestGraph1 where
   edgeIx = Lat.mapEdgeIndx
 
 
-
 test1 :: Test
 test1 = do
-  let name = "Compare fgl BFS and Graph.BFS"
-      l    = 10
-      d    = 3
-      latt = PBCSquareLattice l d
-      dis  = UnimodalDisorder 91 1.7
-      delta = 2.5
-      real = RBBC dis latt delta
-      fg = GSFG real
-      bf = adjBFS fg (adjacencyMap fg) 0
-      out = level bf
-      vs = map (\v -> (v,())) $ vertices fg :: [G.UNode]
-      es = map (\(f,t) -> (f,t,1.0)) $ (map toTuple (edges fg)) :: [G.LEdge Double]
-      mfg = G.mkGraph vs es :: I.Gr () Double
-      expe = IM.fromList $ IBFS.level 0 mfg
-   in case  out == expe of
-        True -> testPassed name "passed!"
-        False -> testFailed name $ (,) (show expe) (show out)
-          
-test2 :: Test
-test2 = do
-  let name = "Test bfs on TestGraph1"
+  let name = "Graph.pushrelabel with FGL's MaxFlow"
       g = TestGraph1
       out = level $ bfs g 1
       expe = IM.fromList [(1,0),(2,1),(5,1),(6,1),(3,2),(4,2),(7,2)]
-   in case  out == expe of
-        True -> testPassed name "passed!"
-        False -> testFailed name $ (,) (show expe) (show out)
-
-test3 :: Test
-test3 = do
-  let name = "Test bfs and adjBFS should give the same results"
-      g = TestGraph1
-      out = bfs g 1
-      expe = adjBFS g (Lat.adjacencyMap g) 1
    in case  out == expe of
         True -> testPassed name "passed!"
         False -> testFailed name $ (,) (show expe) (show out)

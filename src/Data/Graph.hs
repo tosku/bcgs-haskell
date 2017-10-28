@@ -18,8 +18,10 @@ module Data.Graph
     , fromTuple
     , toTuple
     , reverseEdge
+    , adjacentEdges
     , DiGraph (..)
     , Graph (..)
+    , edgesFromNeighbors
     ) where
 
 import Data.Natural
@@ -55,10 +57,18 @@ instance Show Edge where
 -- | Graph definition both directed and undirected
 class Graph g where 
   vertices :: g -> [Vertex]
-  edges :: g -> [Edge]
   neighbors :: g -> Vertex -> [Vertex]  -- ^ outVertices for directed graphs
-  adjacentEdges :: g -> Vertex -> [Edge] -- ^ outEdges for directed graphs
+  edges :: g -> [Edge]
 
+edgesFromNeighbors :: Graph g => g -> [Edge]
+edgesFromNeighbors g = 
+  foldl (\ac v -> 
+    ac ++ map (\n -> Edge v n) (neighbors g v)
+        ) [] $ vertices g
+
+adjacentEdges :: Graph g => g -> Vertex -> [Edge] -- ^ outEdges for directed graphs
+adjacentEdges g v = map (\n -> Edge v n) $ neighbors g v
+  
 class Graph g => DiGraph g where
   inVertices :: g -> Vertex -> [Vertex] 
   inEdges :: g -> Vertex -> [Edge] 

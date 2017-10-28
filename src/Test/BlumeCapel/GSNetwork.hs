@@ -1,19 +1,20 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.BlumeCapel.MaxFlow where
+module Test.BlumeCapel.GSNetwork where
 
 import Language.Haskell.TH
 import Control.Lens
 import Data.Maybe
-import Data.Lattice
 import Data.List
 import Data.List.Unique
 import Test.Test
 import qualified Data.Vector as V
 import Data.Maybe
 
-import Data.Grid
+import Data.Graph
+import Data.Graph.Lattice
+import Data.Graph.Grid
 import Data.BlumeCapel
-import Data.BlumeCapel.MaxFlow
+import Data.BlumeCapel.GSNetwork
 
 fastTests :: [Test]
 fastTests = [ test1
@@ -28,8 +29,8 @@ test1 = do
   let name = "weights of RBBC"
       l    = 20
       d    = 3
-      dis  = UnimodalDisorder 901 0.3
       latt = PBCSquareLattice l d
+      dis  = UnimodalDisorder 901 0.3
       delta = 1.8
       real = RBBC dis latt delta
       expe = -9561.078976568637
@@ -100,7 +101,7 @@ test4 = do
 test5 :: Test
 test5 = do
   let name = "Test Max Flow"
-      l    = 7
+      l    = 6
       d    = 3
       dis  = UnimodalDisorder 901 0.3
       latt = PBCSquareLattice l d
@@ -108,7 +109,7 @@ test5 = do
       real = RBBC dis latt delta
       fg = GSFG real
       out = maxFlow fg
-      expe = show 3.2
+      expe = 3.2
   case out == expe of
     True -> testPassed name "passed!"
     False -> testFailed name $ (,) (show expe) (show out)

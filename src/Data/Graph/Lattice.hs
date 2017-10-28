@@ -11,7 +11,7 @@ Portability : POSIX
 Class providing functions needed for local and global access to a Generic Lattice / Graph
  -}
 
-module Data.Lattice
+module Data.Graph.Lattice
     ( Natural
     , Vertex
     , Edge (..)
@@ -19,13 +19,14 @@ module Data.Lattice
     , toTuple
     , reverseEdge
     , Lattice (..)
-    , Graph (..)
+    , adjacencyMap
     , mapEdgeIndx
     , edgeMap
     ) where
 
 import Data.Natural
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IM
 
 import Data.Graph
 
@@ -40,3 +41,7 @@ edgeMap l = M.fromList (zip (edges l) [1 .. fromIntegral $ numEdges l]) :: M.Map
 
 mapEdgeIndx :: Lattice l => l -> Edge -> Maybe Int
 mapEdgeIndx l e = M.lookup e $ edgeMap l
+
+adjacencyMap :: Lattice l => l -> IM.IntMap [Vertex]
+adjacencyMap l = IM.fromList $ map (\v -> (v, (neighbors l v))) vs
+                 where vs = vertices l

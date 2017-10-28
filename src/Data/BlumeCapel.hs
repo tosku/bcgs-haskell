@@ -18,7 +18,9 @@ Portability : POSIX
 
 
 module Data.BlumeCapel
-    ( Realization (..)
+    ( Graph (..)
+    , Lattice (..)
+    , Realization (..)
     , Disorder (..)
     , UnimodalDisorder (..) -- ^ Gaussian (truncated [0,2]) distribution of random bonds
     , BimodalDisorder (..) -- ^ Dichotomous distribution of random bonds 
@@ -38,7 +40,7 @@ import qualified Data.Vector as V
 
 import Data.PRNG
 import Data.PRNG.MTRNG
-import Data.Grid
+import Data.Graph.Grid
 
 type Energy = Double
 type Mag = Int
@@ -114,7 +116,7 @@ instance Disorder UnimodalDisorder where
   distribution (UnimodalDisorder s d) n = normalJs n s d
 
 normalJs :: Natural -> Seed -> DisorderStrength -> Js
-normalJs n s p = do
+normalJs n s p = 
   let n' = fromIntegral n
       rng = getRNG s :: MTRNG
       μ = 1
@@ -134,9 +136,8 @@ data (Disorder d, Lattice l) => RBBC d l = RBBC d l Delta
 
 instance (Disorder d, Lattice l) => Graph (RBBC d l) where 
   vertices (RBBC d l f) = vertices l
-  edges (RBBC d l f) = edges l
   neighbors (RBBC d l f) = neighbors l
-  adjacentEdges (RBBC d l f) = adjacentEdges l
+  edges (RBBC d l f) = edges l
 
 instance (Disorder d, Lattice l) => Lattice (RBBC d l) where 
   size (RBBC d l f) = size l

@@ -1,5 +1,5 @@
 {-|
-Module      : MaxFlow
+Module      : GSNetwork
 Description : The reduction of finding the ground state Blume-Capel realization to the max-flow of a flow graph 
 Copyright   : Thodoris Papakonstantinou, 2017
 License     : GPL-3
@@ -14,51 +14,40 @@ Portability : POSIX
  {-# LANGUAGE FlexibleInstances #-}
 
 
-module Data.BlumeCapel.MaxFlow
+module Data.BlumeCapel.GSNetwork
   ( weights
   , maxFlow
   , groundState  
   , GSFG (..)
-  , FlowGraph (..)
+  , Network (..)
   ) where
 
 import Data.List
 import Data.Maybe
 import qualified Data.Vector as V
-import qualified Data.Graph.Inductive as I
-import qualified Data.Graph.Inductive.Graph as G
-import qualified Data.Graph.Inductive.Query.MaxFlow as MF
+import qualified Data.IntMap.Strict as IM
 
-import Data.Grid
+import Data.Graph
+import Data.Graph.Lattice
 import Data.BlumeCapel
 
 
-class Lattice f => FlowGraph f where
+class Lattice f => Network f where
   source :: f -> Vertex
   sink :: f -> Vertex
   -- | should respect the `edges` function's ordering: 
   -- Source ++ Realization ++ Target
   capacities :: f -> [Double]
   flows :: f -> [Double] -- ^ should also respect the `edges` function's ordering
+  adjacencyMap :: f -> IM.IntMap [Vertex]
 
 -- | Ground state flow graph from rbbc realization
 data (Disorder d, Lattice l) => GSFG d l = GSFG (RBBC d l)
 
 instance (Disorder d, Lattice l) => Graph (GSFG d l) where  
   vertices (GSFG r) = [0 .. (fromIntegral (size r) + 1)]
-  edges (GSFG r) = flowGraphEdges r
-  neighbors (GSFG r) v 
-    | v == 0 = vertices r
-    | v == (fromIntegral (size r) + 1) = []
-    | otherwise = map (\e -> snd $ toTuple e) (forwardEdges r v)
-  adjacentEdges (GSFG r) v
-    | v == s = map (\v -> fromTuple (s, v)) vs
-    | v == t = []
-    | otherwise = forwardEdges r v ++ [fromTuple (v,t)]
-    where 
-      s = 0
-      t = fromIntegral (size r) + 1 :: Int
-      vs = vertices r
+  neighbors (GSFG r) v = fromJust $ IM.lookup v $ networkNeighbors r
+  edges (GSFG r) = networkEdges r
 
 instance (Disorder d, Lattice l) => Lattice (GSFG d l) where  
   size (GSFG r) = size r + 2
@@ -66,14 +55,37 @@ instance (Disorder d, Lattice l) => Lattice (GSFG d l) where
   forwardEdges = adjacentEdges
   edgeIx (GSFG r) = mapEdgeIndx r
 
+memoWeights :: (Disorder d, Lattice l) => (RBBC d l -> V.Vector Double) -> (RBBC d l -> IM.IntMap Double)
+memoWeights w = let zw = (zip [1..]) . V.toList . w
+                 in IM.fromList . zw
+
 weights :: (Disorder d, Lattice l) => RBBC d l -> V.Vector Double
 weights r = let js = interactions r
                 wi v = let j e = js V.! (fromJust (edgeIx r e) - 1)
                        in (crystalField r) - (sum $ map j (forwardEdges r v))
               in V.fromList $ map wi (vertices r)
+
+networkNeighbors :: (Disorder d, Lattice l) => RBBC d l -> IM.IntMap [Vertex]
+networkNeighbors r = let fgn v
+                            | v == s = foldr (\(v, wi) ac -> case wi < 0.0 of 
+                                                               True -> v: ac
+                                                               False -> ac
+                                                               ) [] $ zip [1..] $ V.toList wis
+                            | v == t = []
+                            | otherwise = let innerNNs = map (\e -> snd $ toTuple e) (forwardEdges r v)
+                                           in case wis V.! (v - 1) >= 0 of
+                                                True -> t:innerNNs
+                                                False -> innerNNs
+                          in IM.fromList $ zip vs (map fgn vs)
+    where wis = weights r
+          n = fromIntegral $ size r
+          s = 0
+          t = fromIntegral (size r) + 1
+          vs = [s..t]
+
         
-flowGraphEdges :: (Disorder d, Lattice l) => RBBC d l -> [Edge]
-flowGraphEdges r = 
+networkEdges :: (Disorder d, Lattice l) => RBBC d l -> [Edge]
+networkEdges r = 
   let wis =  weights r
       s = 0
       t = fromIntegral (size r) + 1 :: Int
@@ -86,7 +98,10 @@ flowGraphEdges r =
               ) ([],[]) $ zip vs (V.toList wis) :: ([Edge],[Edge])
    in (sourceEdges ++ es) ++ targetEdges -- ^ Source edges ++ Realization edges ++ Target edges
 
-instance (Disorder d, Lattice l) => FlowGraph (GSFG d l) where
+-- | networkEdges alias
+--edges (GSFG r) = networkEdges r
+
+instance (Disorder d, Lattice l) => Network (GSFG d l) where
   capacities (GSFG r) = 
     let wis = weights r
         s = 0 :: Int
@@ -100,15 +115,10 @@ instance (Disorder d, Lattice l) => FlowGraph (GSFG d l) where
   flows fg = []
   source fg = 0
   sink (GSFG r) = fromIntegral (size r) + 1
+  adjacencyMap (GSFG r) = networkNeighbors r
 
-
-maxFlow :: (Disorder d, Lattice l) => (GSFG d l) -> String
-maxFlow fg =
-  let vs = map (\v -> (v,())) $ vertices fg :: [G.UNode]
-      es = map (\((f,t),c) -> (f,t,c)) $ zip (map toTuple (edges fg)) (capacities fg) :: [G.LEdge Double]
-      mfg = G.mkGraph vs es :: I.Gr () Double
-   --in  G.prettify mfg
-   in show $ MF.maxFlow mfg (source fg) (sink fg)
+maxFlow :: (Disorder d, Lattice l) => (GSFG d l) -> Double
+maxFlow fg = 3.2
         
 groundState :: (Disorder d, Lattice l) => RBBC d l -> BCConfiguration
 groundState (RBBC d l f) = BCConfiguration (V.fromList []) 

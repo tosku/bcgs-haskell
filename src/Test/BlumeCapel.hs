@@ -7,9 +7,9 @@ import Data.Maybe
 
 import Test.Test
 
+import Data.Graph.Lattice
+import Data.Graph.Grid
 import Data.BlumeCapel
-import Data.Grid
-import Data.Lattice
 
 fastTests :: [Test]
 fastTests = [ test1

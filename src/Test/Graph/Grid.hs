@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.Grid where
+module Test.Graph.Grid where
 
 import Language.Haskell.TH
 import Control.Lens
-import Data.Grid
-import Data.Lattice
+import Data.Graph.Lattice
+import Data.Graph.Grid
 import Data.List
 import Data.List.Unique
 import Test.Test

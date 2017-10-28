@@ -9,9 +9,7 @@ module Test.Test
 
 import Language.Haskell.TH
 import Control.Lens
-import Data.Grid
 import Data.Tuple
-import Data.Lattice
 import System.Console.ANSI
 import System.Exit
 
