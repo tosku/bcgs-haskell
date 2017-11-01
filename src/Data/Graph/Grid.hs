@@ -21,22 +21,23 @@ module Data.Graph.Grid
     , D
     , Vertex
     , Edge
+    , Graph (..)
     , fromTuple
     , toTuple
-    , Graph (..)
-    , Lattice (..)
     , adjacentEdges
     , vertexToCVertex
     , cVertexToVertex
     , PBCSquareLattice (..)
     , pbcEdgeIx
     , mapEdgeIndx
+    , gridSize
+    , gridNumEdges
+    , pbcBackwardEdges
     ) where
 
 import qualified Data.Vector as V
 
 import Data.Graph
-import Data.Graph.Lattice
 
 type L = Natural
 type D = Natural
@@ -58,13 +59,11 @@ instance Graph PBCSquareLattice where
   vertices (PBCSquareLattice l d) = gridVertices l d
   edges (PBCSquareLattice l d) = pbcEdges l d
   neighbors (PBCSquareLattice l d) = pbcNeighbors l d
+  edgeIndex (PBCSquareLattice l d) = pbcEdgeIx l d
+  outEdges (PBCSquareLattice l d) = pbcForwardEdges l d
 
-instance Lattice PBCSquareLattice where
-  size (PBCSquareLattice l d) = gridN l d
-  numEdges (PBCSquareLattice l d) = d * (gridN l d)
-  edgeIx (PBCSquareLattice l d) = pbcEdgeIx l d
-  forwardEdges (PBCSquareLattice l d) = pbcForwardEdges l d
-  
+gridNumEdges (PBCSquareLattice l d) = d * (gridN l d)
+
 instance SquareLattice PBCSquareLattice where
   linearSize (PBCSquareLattice l d) = l
   dimension (PBCSquareLattice l d) = d
@@ -77,13 +76,14 @@ instance Show PBCSquareLattice where
   show a = "Lattice: { \n" ++
                   " L : " ++ show (linearSize a) ++ "\n" ++
                   " D : " ++ show (dimension a) ++ "\n" ++
-                  " numVertices : " ++ show (size a) ++ "\n" ++
-                  " numEdges : " ++ show (length (edges a))
-
-
+                  " numVertices : " ++ show (numVertices a) ++ "\n" ++
+                  " numEdges : " ++ show (gridNumEdges a)
 
 gridN :: L -> D -> Natural
 gridN l d = l ^ d
+
+gridSize :: PBCSquareLattice -> Natural
+gridSize (PBCSquareLattice l d) =  gridN l d
 
 gridVertices :: L -> D -> [Vertex]
 gridVertices l d = [1 .. (fromEnum l ^ fromEnum d)]
@@ -162,11 +162,15 @@ isEdgeInCycle l' (Edge a b)
   | otherwise = False
   where l = fromEnum l'
 
--- | Returns tuple (edge) giving forward and backward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
+-- | Returns tuple (edge) giving forward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
 pbcForwardEdges :: L -> D -> Vertex -> [Edge]
 pbcForwardEdges l d v = fmap (\d -> Edge v (pbcNeighbor v l d Forward)) [1 .. d]
 {-# INLINE pbcForwardEdges #-}
 
+-- | Returns tuple (edge) giving backward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
+pbcBackwardEdges :: L -> D -> Vertex -> [Edge]
+pbcBackwardEdges l d v = fmap (\d -> Edge v (pbcNeighbor v l d Backward)) [1 .. d]
+{-# INLINE pbcBackwardEdges #-}
 
 -- | Returns tuple (edge) giving forward and backward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
 pbcAdjacentEdges :: L -> D -> Vertex -> [Edge]

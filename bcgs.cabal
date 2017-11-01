@@ -18,14 +18,15 @@ library
   exposed-modules:     Data.Graph
                      , Data.Graph.BFS
                      , Test.Graph.BFS
-                     , Data.Lattice
-                     , Test.Test
-                     , Data.Grid
-                     , Test.Grid
+                     , Data.Graph.MaxFlow
+                     , Test.Graph.MaxFlow
+                     , Data.Graph.Grid
+                     , Test.Graph.Grid
                      , Data.BlumeCapel
                      , Test.BlumeCapel
-                     , Data.BlumeCapel.MaxFlow
-                     , Test.BlumeCapel.MaxFlow
+                     , Data.BlumeCapel.GSNetwork
+                     , Test.BlumeCapel.GSNetwork
+                     , Test.Test
   build-depends:       base >= 4.7 && < 5
                      , ansi-terminal >= 0.6.3.1
                      , mtl >= 2.2.1
@@ -33,24 +34,35 @@ library
                      , random
                      , mersenne-random-pure64 >= 0.2.0.5
                      , vector
-                     , lens >= 4.15.1
                      , stm >= 2.4.4.1
                      , template-haskell >= 2.11.1.0
                      , monad-par >= 0.3.4.8
-                     , containers >= 0.5.7.1
+                     , containers >= 0.5.10.2
                      , Unique
                      , unix
                      , async >= 2.1.1
                      , aeson
+                     , fgl >= 5.5.3.1
                      , prng >= 0.1.0.0
                      , either-unwrap >= 1.1
-                     , fgl >= 5.5.3.1
   default-language:    Haskell2010
 
 executable bcgs-exe
   hs-source-dirs:      src
   main-is:             Main.hs
   ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       Data.Graph
+                     , Data.Graph.BFS
+                     , Test.Graph.BFS
+                     , Data.Graph.MaxFlow
+                     , Test.Graph.MaxFlow
+                     , Data.Graph.Grid
+                     , Test.Graph.Grid
+                     , Data.BlumeCapel
+                     , Test.BlumeCapel
+                     , Data.BlumeCapel.GSNetwork
+                     , Test.BlumeCapel.GSNetwork
+                     , Test.Test
   build-depends:       base >= 4.7 && < 5
                      , mtl >= 2.2.1
                      , natural-numbers
@@ -58,9 +70,8 @@ executable bcgs-exe
                      , mersenne-random-pure64 >= 0.2.0.5
                      , stm >= 2.4.4.1
                      , parallel >= 3.2.1.0
-                     , lens >= 4.15.1
                      , monad-par >= 0.3.4.8
-                     , containers >= 0.5.7.1
+                     , containers >= 0.5.10.2
                      , vector
                      , unix
                      , async >= 2.1.1
@@ -81,9 +92,9 @@ test-suite bcgs-test
                      , ansi-terminal >= 0.6.3.1
                      , mtl >= 2.2.1
                      , random
-                     , lens >= 4.15.1
+                     , fgl >= 5.5.3.1
                      , bcgs
-  ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 benchmark bcgs-bench-all
@@ -91,9 +102,11 @@ benchmark bcgs-bench-all
   hs-source-dirs:      bench
   main-is:             Bench.hs
   build-depends:       base 
-                     , prng >= 0.1.0.0
                      , criterion
                      , vector
+                     , containers >= 0.5.10.2
+                     , prng >= 0.1.0.0
+                     , fgl >= 5.5.3.1
                      , bcgs
   ghc-options:         -v3 -O2 -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010

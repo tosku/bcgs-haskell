@@ -2,8 +2,7 @@
 module Test.Graph.Grid where
 
 import Language.Haskell.TH
-import Control.Lens
-import Data.Graph.Lattice
+import Data.Bifunctor
 import Data.Graph.Grid
 import Data.List
 import Data.List.Unique
@@ -11,15 +10,15 @@ import Test.Test
 
 fastTests :: [Test]
 fastTests = [ test2dpbc1
-           , test2dpbc2
-           , test3dpbc1
-           , test3dpbc2
-           , test4dpbc1
-           , test2dedges
-           , testforwards
-           , vertexToCVertexToVertex
-           , testEdge
-           ]
+            , test2dpbc2
+            , test3dpbc1
+            , test3dpbc2
+            , test4dpbc1
+            , test2dedges
+            , testforwards
+            , vertexToCVertexToVertex
+            , testEdge
+            ]
 
 test2dpbc1 :: Test
 test2dpbc1 = do
@@ -83,7 +82,7 @@ testforwards = do
   let name = "Edges of pbcsql L=3 D=2"
       lat  = (PBCSquareLattice  (3 :: L) (2 :: D))
       expe = [(1,2),(1,4),(2,3),(2,5),(3,1),(3,6),(4,5),(4,7),(5,6),(5,8),(6,4),(6,9),(7,8),(7,1),(8,9),(8,2),(9,7),(9,3)]
-      out = foldl (\ac v -> foldl (\ac e -> e:ac) ac (map toTuple $ forwardEdges lat v)) [] (vertices lat)
+      out = foldl (\ac v -> foldl (\ac e -> e:ac) ac (map toTuple $ outEdges lat v)) [] (vertices lat)
   case all id (map (\e -> elem e expe) out) of
     True -> testPassed name "passed!"
     False -> testFailed name $ (bimap <$> id <*> id) show (expe, out)

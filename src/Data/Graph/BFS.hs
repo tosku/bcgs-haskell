@@ -27,7 +27,6 @@ import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as S
 
 import Data.Graph
-import Data.Graph.Lattice
 
 data BFS = BFS { frontier :: S.Set Vertex
                , level :: IM.IntMap Int -- ^ Keeps level of vertex
@@ -36,8 +35,8 @@ data BFS = BFS { frontier :: S.Set Vertex
                , topSort :: [Vertex]
                } deriving (Eq, Show)
 
-skeletonBFS :: Graph g => g -> Vertex -> BFS
-skeletonBFS g s = BFS { frontier = S.singleton s
+initialBFS :: Graph g => g -> Vertex -> BFS
+initialBFS g s = BFS { frontier = S.singleton s
                       , level = IM.fromList [(s,0)]
                       , parent= IM.empty
                       , maxLevel = 0
@@ -47,7 +46,7 @@ skeletonBFS g s = BFS { frontier = S.singleton s
 -- | BFS for implicit neighbor definition (grids, infinite graphs)
 bfs :: Graph g => g -> Vertex -> BFS
 bfs g s = breadthFirstSearch sbfs
-  where sbfs = skeletonBFS g s
+  where sbfs = initialBFS g s
         breadthFirstSearch b
           | S.empty == frontier b = b
           | otherwise = bbfs
@@ -72,7 +71,7 @@ bfs g s = breadthFirstSearch sbfs
 adjBFS :: Graph g => g -> IM.IntMap [Vertex] -> Vertex -> BFS
 adjBFS g neimap s = breadthFirstSearch sbfs
   where memoNeighbors v = fromJust $ IM.lookup v neimap
-        sbfs = skeletonBFS g s
+        sbfs = initialBFS g s
         breadthFirstSearch b
           | S.empty == frontier b = b
           | otherwise = bbfs

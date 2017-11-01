@@ -2,40 +2,53 @@ module Main where
 
 import Criterion.Main
 import qualified Data.Vector as V
+import qualified Data.IntMap.Strict as IM
 
 import qualified Data.PRNG as RNG
 import qualified Data.PRNG.MTRNG as MT
 
+import qualified Data.Graph.Inductive as I
+import qualified Data.Graph.Inductive.Graph as G
+import qualified Data.Graph.Inductive.Query.MaxFlow as MF
+import qualified Data.Graph.Inductive.Query.BFS as IBFS
+
+import qualified Data.Lattice as Lat
+import Data.Graph.BFS
 import Data.Grid
-import Data.Lattice
 import Data.BlumeCapel
-import Data.BlumeCapel.MaxFlow
+import Data.BlumeCapel.GSNetwork
+
 
 main = do
-  let l  = 30
-      l2 = 60
+  let l  = 20
+      l2 = 40
       d = 3
       s = 134
-      r = 1.9
-      delta = 1.7
+      r = 0.9
+      delta = 2.5
       ureal = RBBC (UnimodalDisorder s r) (PBCSquareLattice l d) delta
-      ureal1 = ureal
-      breal = RBBC (BimodalDisorder s r) (PBCSquareLattice l d) delta
       ureal2 = RBBC (UnimodalDisorder s r) (PBCSquareLattice l2 d) delta
+      breal = RBBC (BimodalDisorder s r) (PBCSquareLattice l d) delta
       nume = fromIntegral $ numEdges ureal
-  writeFile "bench/bench.out" $ show (V.sum (interactions $ ureal) / nume) ++ "\n" ++ 
-    show (V.sum $ wis ureal) ++ "\n" ++
-    show (V.sum $ wis breal) ++ "\n"
-  --print $ show (V.take 9 (interactions ureal)) ++ "\n"
+  --writeFile "bench/bench.out" $ show (V.sum (interactions $ ureal) / nume) ++ "\n" ++ 
+    --show (V.sum $ weights ureal) ++ "\n" ++
+    --show (V.sum $ weights breal) ++ "\n"
+      latt = PBCSquareLattice l d
+      dis  = UnimodalDisorder s r
+      real = RBBC dis latt delta
+      fg = GSFG real
+      bf = adjBFS fg (adjacencyMap fg) 0
+      vs = map (\v -> (v,())) $ vertices fg :: [G.UNode]
+      es = map (\(f,t) -> (f,t,1.0)) $ (map toTuple (edges fg)) :: [G.LEdge Double]
+      mfg = G.mkGraph vs es :: I.Gr () Double
+  writeFile "bench/bench.out" $ show (adjBFS fg (adjacencyMap fg) 0)
   defaultMain [ 
                 bgroup "Blume-Capel realization" [ 
-                                                   bench "30^3 uni Weights" $ nf wis ureal1
-                                                 , bench "30^3 uni Weights" $ nf mwis ureal1
-                                                 , bench "60^3 uni Weights" $ nf wis ureal2
-                                                 , bench "60^3 uni Weights" $ nf mwis ureal2
-                                                  --bench "20^3 dichotomous" $ nf (\s -> V.sum (breal (20 :: L) (3 :: D) s r) ) seed
-                                                 {-{-, bench "20^3 normal" $ nf (\s -> V.sum (ureal (20 :: L) (3 :: D) s r) ) seed-}-}
-                                                 {-{-, bench "60^3 dichotomous" $ nf (\s -> V.sum (breal (60 :: L) (3 :: D) s) ) s-}-}
-                                                 {-{-, bench "60^3 normal" $ nf (\s -> V.sum (ureal (60 :: L) (3 :: D) s) ) s-}-}
+                                                   bench "20^3 unimodal weights" $ nf weights ureal
+                                                 , bench "40^3 unimodal weights" $ nf weights ureal2
                     ]
+              , bgroup "Blume-Capel realization" [ 
+                                                   bench "20^3 Graph.BFS" $ nf (\x -> level $ adjBFS x (adjacencyMap x) 0) fg
+                                                 , bench "20^3 FGL BFS" $ nf (\x -> IBFS.level 0 x) mfg
+                ]
               ]

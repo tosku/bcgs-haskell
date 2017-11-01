@@ -2,23 +2,28 @@
 module Test.BlumeCapel.GSNetwork where
 
 import Language.Haskell.TH
-import Control.Lens
 import Data.Maybe
 import Data.List
 import Data.List.Unique
 import Test.Test
 import qualified Data.Vector as V
-import Data.Maybe
+import qualified Data.Map as M
+import qualified Data.IntMap as IM
+
+import qualified Data.Graph.Inductive as I
+import qualified Data.Graph.Inductive.Graph as G
+import qualified Data.Graph.Inductive.Query.MaxFlow as MF
+import qualified Data.Graph.Inductive.Query.BFS as IBFS
 
 import Data.Graph
-import Data.Graph.Lattice
 import Data.Graph.Grid
+import Data.Graph.MaxFlow
+import Data.Graph.BFS
 import Data.BlumeCapel
 import Data.BlumeCapel.GSNetwork
 
 fastTests :: [Test]
 fastTests = [ test1
-            , test2
             , test3
             , test4
             , test5
@@ -33,33 +38,11 @@ test1 = do
       dis  = UnimodalDisorder 901 0.3
       delta = 1.8
       real = RBBC dis latt delta
-      expe = -9561.078976568637
-      out = V.sum $ weights real :: Double
+      expe = -9561.078976568599
+      out = IM.fold (\ac w -> ac + w) 0 $ weights real :: Double
   case  out == expe of
     True -> testPassed name "passed!"
     False -> testFailed name $ (,) (show expe) (show out)
-
-mwis :: (Disorder d, Lattice l) => RBBC d l -> V.Vector Double
-mwis r = let js = interactions r
-             wi v = 
-              let j e = js V.! (fromJust (mapEdgeIndx r e) - 1)
-                    in (crystalField r) - (sum $ map j (forwardEdges r v))
-        in V.fromList $ map wi (vertices r)
-
-test2 :: Test
-test2 = do
-  let name = "mapEdgeIndx should equal EdgeIx -- Lattice test"
-      l    = 20
-      d    = 3
-      dis  = UnimodalDisorder 901 0.3
-      latt = PBCSquareLattice l d
-      delta = 1.8
-      real = RBBC dis latt delta
-      fws = weights real :: V.Vector Double
-      mws = mwis real :: V.Vector Double
-  case  fws == mws of
-    True -> testPassed name "passed!"
-    False -> testFailed name $ (,) (show fws) (show mws)
 
 test3 :: Test
 test3 = do
@@ -77,40 +60,40 @@ test3 = do
     True -> testPassed name "passed!"
     False -> testFailed name $ (,) (show expe) (show $ length out)
 
-
 test4 :: Test
 test4 = do
-  let name = "capacities should equal abs weights"
+  let name = "Compare fgl BFS and Graph.BFS"
       l    = 10
-      d    = 3
-      dis  = UnimodalDisorder 901 0.3
+      d    = 2
       latt = PBCSquareLattice l d
-      n = fromIntegral $ size latt 
-      delta = 1.8
+      dis  = UnimodalDisorder 91 1.7
+      delta = 2.5
       real = RBBC dis latt delta
       fg = GSFG real
-      out = take n $ capacities fg 
-      expe = map (\w -> case w < 0 of
-                          True -> -w
-                          False -> 0.0 
-                 ) $ V.toList $ weights real
-  case out == expe of
-    True -> testPassed name "passed!"
-    False -> testFailed name $ (,) (show $ take 10 (capacities fg)) (show $ V.take 10 (weights real))
+      bf = adjBFS fg (adjacencyMap fg) 0
+      out = level bf
+      vs = map (\v -> (v,())) $ vertices fg :: [G.UNode]
+      es = map (\(f,t) -> (f,t,1.0)) $ (map toTuple (edges fg)) :: [G.LEdge Double]
+      mfg = G.mkGraph vs es :: I.Gr () Double
+      expe = IM.fromList $ IBFS.level 0 mfg
+   in case  out == expe of
+        True -> testPassed name "passed!"
+        False -> testFailed name $ (,) (show expe) (show out)
 
 test5 :: Test
 test5 = do
   let name = "Test Max Flow"
-      l    = 6
-      d    = 3
+      l    = 8
+      d    = 2
       dis  = UnimodalDisorder 901 0.3
       latt = PBCSquareLattice l d
-      delta = 2.5
+      delta = 1.5
       real = RBBC dis latt delta
       fg = GSFG real
-      out = maxFlow fg
+      mf = maxFlow fg
+      out = fromRational $ flow $ mf
       expe = 3.2
   case out == expe of
     True -> testPassed name "passed!"
-    False -> testFailed name $ (,) (show expe) (show out)
+    False -> testFailed name $ (,) (show expe) (show $ steps mf)
 

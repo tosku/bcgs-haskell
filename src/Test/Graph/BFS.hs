@@ -2,7 +2,6 @@
 module Test.Graph.BFS where
 
 import Language.Haskell.TH
-import Control.Lens
 import Data.Maybe
 import Data.List
 import Data.List.Unique
@@ -17,19 +16,20 @@ import qualified Data.Graph.Inductive.Query.MaxFlow as MF
 import qualified Data.Graph.Inductive.Query.BFS as IBFS
 
 import Data.Graph
-import qualified Data.Graph.Lattice as Lat
 import Data.Graph.BFS
 import Data.Graph.Grid
 import Data.BlumeCapel
 import Data.BlumeCapel.GSNetwork
 
 fastTests :: [Test]
-fastTests = [ test1
-            , test2
+fastTests = [ 
+              test2
             , test3
             ]
 
 data TestGraph1 = TestGraph1
+instance Eq TestGraph1 where
+  (==) _ _ = True
 
 instance Graph TestGraph1 where
   vertices g = [1..7]
@@ -42,33 +42,6 @@ instance Graph TestGraph1 where
   neighbors g 7 = [3,5,7]
   edges = edgesFromNeighbors
 
-instance Lat.Lattice TestGraph1 where
-  size g = 7
-  numEdges g = 11
-  edgeIx = Lat.mapEdgeIndx
-
-
-
-test1 :: Test
-test1 = do
-  let name = "Compare fgl BFS and Graph.BFS"
-      l    = 10
-      d    = 3
-      latt = PBCSquareLattice l d
-      dis  = UnimodalDisorder 91 1.7
-      delta = 2.5
-      real = RBBC dis latt delta
-      fg = GSFG real
-      bf = adjBFS fg (adjacencyMap fg) 0
-      out = level bf
-      vs = map (\v -> (v,())) $ vertices fg :: [G.UNode]
-      es = map (\(f,t) -> (f,t,1.0)) $ (map toTuple (edges fg)) :: [G.LEdge Double]
-      mfg = G.mkGraph vs es :: I.Gr () Double
-      expe = IM.fromList $ IBFS.level 0 mfg
-   in case  out == expe of
-        True -> testPassed name "passed!"
-        False -> testFailed name $ (,) (show expe) (show out)
-          
 test2 :: Test
 test2 = do
   let name = "Test bfs on TestGraph1"
@@ -84,7 +57,7 @@ test3 = do
   let name = "Test bfs and adjBFS should give the same results"
       g = TestGraph1
       out = bfs g 1
-      expe = adjBFS g (Lat.adjacencyMap g) 1
+      expe = adjBFS g (adjacencyMap g) 1
    in case  out == expe of
         True -> testPassed name "passed!"
         False -> testFailed name $ (,) (show expe) (show out)
