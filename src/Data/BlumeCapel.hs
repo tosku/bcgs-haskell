@@ -15,21 +15,24 @@ Portability : POSIX
  {-# LANGUAGE MultiParamTypeClasses #-}
  {-# LANGUAGE FunctionalDependencies #-}
  {-# LANGUAGE FlexibleInstances #-}
+ {-# LANGUAGE Rank2Types #-}
 
 
 module Data.BlumeCapel
     ( Graph (..)
-    , Realization (..)
-    , Disorder (..)
-    , UnimodalDisorder (..) -- ^ Gaussian (truncated [0,2]) distribution of random bonds
-    , BimodalDisorder (..) -- ^ Dichotomous distribution of random bonds 
+    , BondDisorder (..)
     , Delta -- ^ Crysta field strength Double
-    , RBBC (..) -- ^ Random Bond Blume Capel
-    , crystalField
-    , BCSpin (..)
+    , SpinOne (..)
     , Spin (..)
-    , Configuration (..)
+    , RBBC (..) -- ^ Random Bond Blume Capel
+    , RandomBond (..)
+    , Realization (..)
+    , Replica (..)
+    , SpinConfiguration (..)
     , BCConfiguration (..)
+    , size
+    , realization'RBBC
+    , replica'RBBC
     ) where
 
 import Data.List
@@ -43,24 +46,20 @@ import Data.PRNG
 import Data.PRNG.MTRNG
 import Data.Graph
 
-type Energy = Double
-type Mag = Int
+type Energy = Rational
+type Magnetization = Rational
 
-class Spin s where
-  project :: (Num p) => s -> s -> p
+class Eq s => Spin s where
+  referenceSpin :: s -- ^ axis of reference (Up) - needed for measuring magnetization 
+  project :: s -> s -> Magnetization
 
-newtype IsingSpin = IsingSpin Bool deriving (Show, Eq, Ord) -- probably more memory efficient
-instance Spin IsingSpin where
-  project a b 
-    | a == b =  1
-    | a /= b = -1
-
-data BCSpin = Up 
+data SpinOne = Up 
             | Zero 
             | Down 
   deriving (Eq, Ord, Show, Read, Bounded, Enum)
 
-instance Spin BCSpin where
+instance Spin SpinOne where
+  referenceSpin = Up
   project a b
     | a == Up && b == Up = 1
     | a == Down && b == Down = 1
@@ -68,104 +67,108 @@ instance Spin BCSpin where
     | a == Down && b == Up = -1
     | otherwise = 0
 
-class Spin s => Configuration c s | c -> s where
-  configuration :: c -> V.Vector s
-  numSpins :: c -> Int
-  spin :: c -> Vertex -> s
-  sumconfiguration :: c -> Mag
+newtype Spin s => SpinConfiguration s = SpinConfiguration (IM.IntMap s)
+  deriving (Show,Eq)
 
-data BCConfiguration = BCConfiguration (V.Vector BCSpin)
+spin :: Spin s => SpinConfiguration s -> Vertex -> Maybe s
+spin (SpinConfiguration c) v = IM.lookup v c
 
-instance Configuration BCConfiguration BCSpin where
-  configuration (BCConfiguration c) = c
-  numSpins c = V.length $ configuration c
-  spin c v = (configuration c) V.! (v - 1)
-  sumconfiguration c = foldl (\acc s -> acc + project Up s) 0 (configuration c)
+getMagnetization :: Spin s => SpinConfiguration s -> Magnetization
+getMagnetization (SpinConfiguration c) = foldl (\ac s -> ac + (project referenceSpin s)) 0 c
 
-type Delta = Double
+type BCConfiguration = SpinConfiguration SpinOne
+
+type Delta = Rational
 
 type DisorderStrength = Double -- ^ Should be between [0,1]
-type J = Edge -> Energy -- ^ Exchange interaction
-type Js = M.Map Edge Energy
+type J = Energy -- ^ Exchange interaction strength
+type Js = M.Map Edge J
+data (Spin s) => Field s = Field (IM.IntMap Energy)
+  deriving (Show,Eq)
 
-isingJ :: J
-isingJ _ = 1
+data BondDisorder = Dichotomous Seed DisorderStrength |
+  Unimodal Seed DisorderStrength
+  deriving (Show,Eq)
 
-class Eq r => Disorder r where
-  distribution :: r -> Int -> IM.IntMap Energy
+getInteractions :: BondDisorder -> [Edge] -> Js
+getInteractions bc es =
+  case bc of
+    Dichotomous s d -> dichotomousJs es s d
+    Unimodal s d -> unimodalJs es s d
+    otherwise -> M.empty
 
-data BimodalDisorder = BimodalDisorder Seed DisorderStrength
-  deriving (Eq,Show)
-
-instance Disorder BimodalDisorder where
-  distribution (BimodalDisorder s d) n = dichotomousJs n s d
-
-dichotomousJs :: Int -> Seed -> DisorderStrength -> IM.IntMap Energy
-dichotomousJs n s p = do
+dichotomousJs :: [Edge] -> Seed -> DisorderStrength -> Js
+dichotomousJs es s p = do
   let p' = case (p < 0) || (p > 1) of
            True -> 1
            False -> p
       jWeak = 1.0 - p'
       jStrong = 2.0 - jWeak
-      n' = fromIntegral n 
-      js = IM.fromList $ zip [1..n'] (repeat jStrong)
-      weakindxs = sample (getRNG s :: MTRNG) (quot n' 2) [1 .. n']
-   in foldl (\ac i -> IM.insert i jWeak ac) js weakindxs
+      n = length es
+      strongjs = IM.fromList $ zip [1..n] (repeat jStrong)
+      weakindxs = sample (getRNG s :: MTRNG) (quot n 2) [1..n]
+      js = foldl (\ac i -> IM.insert i jWeak ac) strongjs weakindxs
+   in M.fromList $ zip es (map (toRational . snd) $ IM.toList js)
 
-data UnimodalDisorder = UnimodalDisorder Seed DisorderStrength
-  deriving (Eq,Show)
-
-instance Disorder UnimodalDisorder where
-  distribution (UnimodalDisorder s d) n = normalJs n s d
-
-normalJs :: Int -> Seed -> DisorderStrength -> IM.IntMap Energy
-normalJs n s p = 
-  let n' = fromIntegral n
+unimodalJs :: [Edge] -> Seed -> DisorderStrength -> Js
+unimodalJs es s p = 
+  let n = length es
       rng = getRNG s :: MTRNG
       μ = 1
       σ = p
       f = 0
       t = 2
-      js = IM.fromList $ zip [1..] (truncatedNormalSample rng μ σ f t n')
-   in js
+      js = IM.fromList $ zip [1..] (map toRational (truncatedNormalSample rng μ σ f t n))
+   in M.fromList $ zip es (map snd $ IM.toList js)
 
-class Realization r where
-  size :: r -> Int
-  numBonds :: r -> Int
-  interactions :: r -> Js
-  energy :: (Configuration c s) => r -> c -> Either String Energy
-  magnetization :: (Configuration c s) => r -> c -> Either String Mag
+data Spin s => Realization r s = Realization { lattice :: Graph
+                                             , interactions :: Js
+                                             , fieldCoupling :: s -> Energy
+                                             }
+instance Spin s => Eq (Realization r s) where
+  (==) r1 r2 = let allUp = SpinConfiguration $ IM.fromList (zip [1..(numVertices (lattice r1))] (repeat referenceSpin))
+                in interactions r1 == interactions r2 &&
+                    getFieldCoupling r1 allUp == getFieldCoupling r2 allUp
 
-data (Disorder d, Graph l) => RBBC d l = RBBC d l Delta
-  deriving (Eq)
+getFieldCoupling :: Spin s => Realization r s -> SpinConfiguration s -> [Energy]
+getFieldCoupling r c = map ((fieldCoupling r) . fromJust . (spin c)) (vertices (lattice r))
 
-instance (Disorder d, Graph l) => Graph (RBBC d l) where 
-  vertices (RBBC d l f) = vertices l
-  edges (RBBC d l f) = edges l
-  neighbors (RBBC d l f) = neighbors l
-  outEdges (RBBC d l f) = outEdges l
-  edgeIndex (RBBC d l f) = edgeIndex l
+data Spin s => Replica r s = Replica { realization :: Realization r s
+                                     , configuration :: SpinConfiguration s
+                                     , energy :: Energy
+                                     }
+instance (Spin s) => Eq (Replica r s) where
+  (==) r1 r2 = realization r1 == realization r2 
+    && configuration r1 == configuration r2
 
-crystalField :: (Disorder d, Graph l) => RBBC d l -> Delta
-crystalField (RBBC d l f) = f
 
-instance (Disorder d, Graph l) => Realization (RBBC d l) where 
-  size (RBBC d l f) = numVertices l
-  numBonds (RBBC d l f) = numEdges l
-  interactions (RBBC d l f) = let eid e = fromJust $ edgeIndex l e
-                                  js = distribution d (numEdges l)
-                                  getj e = fromJust $ IM.lookup (eid e) js 
-                               in M.fromList $ map (\e -> (e, getj e)) (edges l)
-  energy r c = case numSpins c == fromIntegral (size r) of
-                 True -> let bondenergy = foldl' (\ac e -> 
-                                   let (f,t) = toTuple e 
-                                       projc conf = project (spin conf f) (spin conf t)
-                                       be = (projc c) * (fromJust $ M.lookup e (interactions r))
-                                   in ac - be
-                               ) 0 (edges r) 
-                             siteenergy = foldl' (\ac v -> ac + (project (spin c v) (spin c v)) * (crystalField r)) 0 (vertices r)
-                         in Right $ bondenergy + siteenergy
-                 False -> Left "Error: spin configuration not compatible with lattice"
-  magnetization r c = case numSpins c == fromIntegral (size r) of
-                   True -> Right $ sumconfiguration c
-                   False -> Left "Error: spin configuration not compatible with lattice"
+data RandomBond = RandomBond { bondDisorder :: BondDisorder
+                             , crystalField :: Delta
+                             }
+  deriving (Eq,Show)
+
+type RBBC = Realization RandomBond SpinOne
+
+size :: Spin s => Realization r s -> Int
+size r = numVertices $ lattice r
+
+realization'RBBC :: RandomBond -> Graph -> Realization RandomBond SpinOne
+realization'RBBC r g = Realization { lattice = g
+                                   , interactions = getInteractions (bondDisorder r) (edges g)
+                                   , fieldCoupling = (\s -> (project s s) * (crystalField r))
+                                   }
+
+replica'RBBC :: Realization RandomBond SpinOne -> (Realization RandomBond SpinOne -> BCConfiguration) -> Replica RandomBond SpinOne
+replica'RBBC r rtoc = Replica { configuration = (rtoc r)
+                              , energy = let c = (rtoc r)
+                                             bondenergy = foldl' (\ac e -> 
+                                               let (f,t) = toTuple e 
+                                                   projc conf =  project <$> (spin conf f) <*> (spin conf t)
+                                                   be = (fromJust $ projc c) * (fromJust $ M.lookup e (interactions r))
+                                                in ac - be
+                                               ) 0 (edges (lattice r)) 
+                                             siteenergy = sum $ getFieldCoupling r c
+                                         in bondenergy + siteenergy
+                               }
+
+

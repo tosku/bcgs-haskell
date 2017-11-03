@@ -35,7 +35,7 @@ data BFS = BFS { frontier :: S.Set Vertex
                , topSort :: [Vertex]
                } deriving (Eq, Show)
 
-initialBFS :: Graph g => g -> Vertex -> BFS
+initialBFS :: Graph -> Vertex -> BFS
 initialBFS g s = BFS { frontier = S.singleton s
                       , level = IM.fromList [(s,0)]
                       , parent= IM.empty
@@ -44,7 +44,7 @@ initialBFS g s = BFS { frontier = S.singleton s
                       }
 
 -- | BFS for implicit neighbor definition (grids, infinite graphs)
-bfs :: Graph g => g -> Vertex -> BFS
+bfs :: Graph -> Vertex -> BFS
 bfs g s = breadthFirstSearch sbfs
   where sbfs = initialBFS g s
         breadthFirstSearch b
@@ -68,7 +68,7 @@ bfs g s = breadthFirstSearch sbfs
                              })
 
 -- | BFS for graph with provided vertex adjacencyList
-adjBFS :: Graph g => g -> IM.IntMap [Vertex] -> Vertex -> BFS
+adjBFS :: Graph -> IM.IntMap [Vertex] -> Vertex -> BFS
 adjBFS g neimap s = breadthFirstSearch sbfs
   where memoNeighbors v = fromJust $ IM.lookup v neimap
         sbfs = initialBFS g s

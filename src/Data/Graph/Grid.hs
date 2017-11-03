@@ -19,9 +19,6 @@ module Data.Graph.Grid
     ( Natural
     , L
     , D
-    , Vertex
-    , Edge
-    , Graph (..)
     , fromTuple
     , toTuple
     , adjacentEdges
@@ -33,6 +30,7 @@ module Data.Graph.Grid
     , gridSize
     , gridNumEdges
     , pbcBackwardEdges
+    , graphCubicPBC
     ) where
 
 import qualified Data.Vector as V
@@ -47,37 +45,30 @@ data CEdge = CEdge CVertex CVertex -- ^ Cartesian representation of a Lattice Ve
 
 data Direction = Forward | Backward deriving (Eq, Ord, Show, Read, Bounded, Enum)
 
-class SquareLattice l where
-    linearSize :: l -> L -- ^ Linear size of lattice
-    dimension :: l -> D -- ^ Dimensionality
-
 -- | A PBCSquareLattice is the Cartesian product of a cycle graph of length L
 -- (C_L) => (C_L)▢^d
 data PBCSquareLattice = PBCSquareLattice L D
-
-instance Graph PBCSquareLattice where
-  vertices (PBCSquareLattice l d) = gridVertices l d
-  edges (PBCSquareLattice l d) = pbcEdges l d
-  neighbors (PBCSquareLattice l d) = pbcNeighbors l d
-  edgeIndex (PBCSquareLattice l d) = pbcEdgeIx l d
-  outEdges (PBCSquareLattice l d) = pbcForwardEdges l d
-
-gridNumEdges (PBCSquareLattice l d) = d * (gridN l d)
-
-instance SquareLattice PBCSquareLattice where
-  linearSize (PBCSquareLattice l d) = l
-  dimension (PBCSquareLattice l d) = d
-
 instance Eq PBCSquareLattice where 
   (==) (PBCSquareLattice la da) (PBCSquareLattice lb db) = 
     la == la && da == db        
-
 instance Show PBCSquareLattice where 
-  show a = "Lattice: { \n" ++
-                  " L : " ++ show (linearSize a) ++ "\n" ++
-                  " D : " ++ show (dimension a) ++ "\n" ++
-                  " numVertices : " ++ show (numVertices a) ++ "\n" ++
-                  " numEdges : " ++ show (gridNumEdges a)
+  show (PBCSquareLattice l d) = "Lattice: { \n" ++
+                  " L : " ++ show l ++ "\n" ++
+                  " D : " ++ show d ++ "\n" ++
+                    " numVertices : " ++ show (gridN l d) ++ "\n" ++
+                      " numEdges : " ++ show (gridNumEdges (PBCSquareLattice l d))
+
+graphCubicPBC :: PBCSquareLattice -> Graph
+graphCubicPBC (PBCSquareLattice l d) = Graph
+    { vertices = gridVertices l d
+    , edges = pbcEdges l d 
+    , neighbors = pbcNeighbors l d 
+    , edgeIndex = pbcEdgeIx l d 
+    , outEdges  = pbcForwardEdges l d 
+    } 
+
+gridNumEdges (PBCSquareLattice l d) = d * (gridN l d)
+
 
 gridN :: L -> D -> Natural
 gridN l d = l ^ d

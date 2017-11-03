@@ -13,22 +13,29 @@ import Data.BlumeCapel.GSNetwork
 import Data.Graph.MaxFlow
 
 
-data TestGraph1 = TestGraph1
-instance Eq TestGraph1 where
-  (==) _ _ = True
+graphTest1 = Graph { vertices = [1..7]
+                   , neighbors = (\v ->let nei 1 = [2,5,6]
+                                           nei 2 = [5,3]
+                                           nei 3 = [4]
+                                           nei 4 = []
+                                           nei 5 = [4,7]
+                                           nei 6 = [7]
+                                           nei 7 = [4]
+                                       in nei v
+                                 )
+                   , edges = edgesFromNeighbors graphTest1
+                   , edgeIndex = mapEdgeIndx graphTest1
+                   , outEdges = (\v -> map (\n -> Edge v n) (neighbors graphTest1 v))
+                   }
+  
 
-instance Graph TestGraph1 where
-  vertices g = [1..7]
-  neighbors g 1 = [2,5,6]
-  neighbors g 2 = [5,3]
-  neighbors g 3 = [4]
-  neighbors g 4 = []
-  neighbors g 5 = [4,7]
-  neighbors g 6 = [7,5]
-  neighbors g 7 = [4]
-  edges = edgesFromNeighbors
-  edgeIndex = mapEdgeIndx
-  {-outEdges = neighbors -}
+fg = Network { graph = graphTest1
+             , source = 1
+             , sink = 7
+             , capacities = M.fromList $ zip (edges (graph fg)) (map toRational $ repeat 1.0)
+             , flow = M.empty
+             }
+
   
 {-fg = TestGraph1-}
 {-cs = M.fromList $ zip (edges fg) (repeat 1.0)-}
@@ -39,12 +46,14 @@ main = do
   let name = "weights of RBBC"
       l    = 6
       d    = 2
-      dis  = UnimodalDisorder 901 0.3
-      latt = PBCSquareLattice l d
-      delta = 1.8
-      real = RBBC dis latt delta
-      fg = GSFG real
-      out = maxFlow fg
+      latt = graphCubicPBC $ PBCSquareLattice l d
+      rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
+                        , crystalField = 1.8
+                        }
+      real = realization'RBBC rbbc latt
+      ou = maxFlow fg
+      fg' = network'RBBC real
+      out = maxFlow fg'
 
       {-cs = map toRational $ replicate (fromIntegral $ numEdges fg) 1.0-}
       {-out = pushRelabel real (M.map toRational $ interactions real) 1 17-}
@@ -59,7 +68,7 @@ main = do
   putStrLn "Getting max flow of test graph"
   putStrLn $ show out 
   putStrLn $ show $ steps out
-  putStrLn $ show $ (fromRational (flow out) :: Double)
+  putStrLn $ show $ (fromRational (preflow out) :: Double)
   {-putStrLn $ show $ netNeighbors out 1 -}
   {-putStrLn $ show $ netNeighbors out 2 -}
   {-putStrLn $ show $ netNeighbors out 5 -}

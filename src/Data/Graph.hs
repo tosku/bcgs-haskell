@@ -13,7 +13,7 @@ Graph TypeClass definitions
 
 module Data.Graph
     ( Natural
-    , Vertex
+    , Vertex (..)
     , Edge (..)
     , Graph (..)
     , fromTuple
@@ -33,6 +33,7 @@ module Data.Graph
     ) where
 
 
+import Data.List
 import Data.Natural
 import qualified Data.Map.Lazy as M
 import qualified Data.IntMap.Lazy as IM
@@ -63,43 +64,51 @@ toTuple (Edge s t) = (s,t)
 reverseEdge :: Edge -> Edge
 reverseEdge (Edge s t) = Edge t s
 
-reverseEdges :: Graph g => g -> [Edge]
+reverseEdges :: Graph -> [Edge]
 reverseEdges g = map reverseEdge $ edges g
 
-numVertices :: Graph g => g -> Int
+numVertices :: Graph -> Int
 numVertices g = length $ vertices g
-numEdges :: Graph g => g -> Int
+numEdges :: Graph -> Int
 numEdges g = length $ edges g
 
 -- | Graph definition both directed and undirected
-class Eq g => Graph g where 
-  vertices :: g -> [Vertex]
+data Graph = Graph { vertices :: [Vertex]
   -- | edges should be unique even if graph is undirected
-  edges :: g -> [Edge]
+                   , edges :: [Edge]
   -- | out vertices for directed and all neighbors for undirected graphs
-  neighbors :: g -> Vertex -> [Vertex]  
+                   , neighbors :: Vertex -> [Vertex]  
   -- | traverse all edges uniquely by traversing on the vertices 
-  outEdges :: g -> Vertex -> [Edge] 
-  -- | finds the index
-  edgeIndex :: g -> Edge -> Maybe Int
+                   , outEdges :: Vertex -> [Edge] 
+  -- | gives the position of the edge to the edges list
+                   , edgeIndex :: Edge -> Maybe Int
+                   }
+
+instance Eq Graph where
+  (==) g1 g2 = (sort (vertices g1) == sort (vertices g2))
+               && (sort (edges g1) == sort (edges g2))
+
+instance Show Graph where
+  show g = "vertices: " ++ show (vertices g) ++ "\n" ++
+            "edges: " ++ show (edges g) ++ "\n"
 
 outVertices g v = map from $ filter (\e -> from e == v) (edges g)
 
-edgesFromNeighbors :: Graph g => g -> [Edge]
+edgesFromNeighbors :: Graph -> [Edge]
 edgesFromNeighbors g = 
   foldl (\ac v -> 
     ac ++ map (\n -> Edge v n) (neighbors g v)
         ) [] $ vertices g
 
-adjacentEdges :: Graph g => g -> Vertex -> [Edge]
+adjacentEdges :: Graph -> Vertex -> [Edge]
 adjacentEdges g v = map (\n -> Edge v n) $ neighbors g v
 
-edgeMap :: Graph l => l -> M.Map Edge Int
-edgeMap l = M.fromList (zip (edges l) [1..]) :: M.Map Edge Int
+edgeMap :: Graph -> M.Map Edge Int
+edgeMap g = M.fromList (zip (edges g) [1..]) :: M.Map Edge Int
 
-mapEdgeIndx :: Graph l => l -> Edge -> Maybe Int
-mapEdgeIndx l e = M.lookup e $ edgeMap l
+mapEdgeIndx :: Graph -> Edge -> Maybe Int
+mapEdgeIndx g e = M.lookup e $ edgeMap g
 
-adjacencyMap :: Graph l => l -> IM.IntMap [Vertex]
-adjacencyMap l = IM.fromList $ map (\v -> (v, (neighbors l v))) vs
-                 where vs = vertices l
+adjacencyMap :: Graph -> IM.IntMap [Vertex]
+adjacencyMap g = IM.fromList $ map (\v -> (v, (neighbors g v))) vs
+                 where vs = vertices g
