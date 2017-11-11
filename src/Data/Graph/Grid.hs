@@ -120,7 +120,6 @@ vertexToCVertex l' d' v = do
   out
   where l = fromEnum l'
         d = fromEnum d'
-{-# INLINE vertexToCVertex #-}
 
 -- | The reverse function of vertexToCVertex
 cVertexToVertex :: L -> D -> CVertex -> Vertex
@@ -156,12 +155,10 @@ isEdgeInCycle l' (Edge a b)
 -- | Returns tuple (edge) giving forward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
 pbcForwardEdges :: L -> D -> Vertex -> [Edge]
 pbcForwardEdges l d v = fmap (\d -> Edge v (pbcNeighbor v l d Forward)) [1 .. d]
-{-# INLINE pbcForwardEdges #-}
 
 -- | Returns tuple (edge) giving backward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
 pbcBackwardEdges :: L -> D -> Vertex -> [Edge]
 pbcBackwardEdges l d v = fmap (\d -> Edge v (pbcNeighbor v l d Backward)) [1 .. d]
-{-# INLINE pbcBackwardEdges #-}
 
 -- | Returns tuple (edge) giving forward and backward vertices of given vertex on a Toroidal Boundary Conditions (pbc) grid
 pbcAdjacentEdges :: L -> D -> Vertex -> [Edge]
@@ -196,4 +193,3 @@ pbcEdgeIx l d e = do
     diff :: CEdge -> (((Vertex,Vertex),Int),Int)
     diff (CEdge a b) = foldl step (((0,0),0),0) $ zip (zip a b) [1..d']
 
-{-# INLINE pbcEdgeIx #-}

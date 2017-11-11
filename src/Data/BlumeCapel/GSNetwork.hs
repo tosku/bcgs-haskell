@@ -24,9 +24,9 @@ module Data.BlumeCapel.GSNetwork
 
 import Data.List
 import Data.Maybe
-import qualified Data.Map.Strict as M
+import qualified Data.Map.Lazy as M
 import qualified Data.Vector as V
-import qualified Data.IntMap.Strict as IM
+import qualified Data.IntMap.Lazy as IM
 
 import Data.Graph
 import Data.Graph.MaxFlow
@@ -41,7 +41,15 @@ network'RBBC r = Network { graph = let g = lattice r
                                              , edges = networkEdges r
                                              , neighbors = (\v -> fromJust $ IM.lookup v $ networkNeighbors r)
                                              , outEdges = outEdges g
-                                             , edgeIndex = mapEdgeIndx g
+                                             {-, edgeIndex = mapEdgeIndx (graph $ network'RBBC r)-}
+                                             , edgeIndex = netEdgeIx r 
+                                             {-, edgeIndex = (\e -> let s = 0-}
+                                                                      {-t = size r + 1-}
+                                                                   {-in case from e == s || to e == t of-}
+                                                                        {-True -> {-# SCC edgeMAP #-} netEdgeIx r e-}
+                                                                        {-False -> {-# SCC edgeIX #-} edgeIndex (lattice r) e-}
+                                                           {-)-}
+
                                              }
                          , source = 0
                          , sink = size r + 1
@@ -56,6 +64,17 @@ weights r = let js = interactions r
                         in (fieldCoupling r Up) - (sum $ map j (outEdges g v))
               in IM.fromList $ zip (vertices g) (map wi (vertices g))
 
+netEdgeIx r (Edge f t) = IM.lookup t $ fromJust (IM.lookup f (netEdgeMap r))
+
+netEdgeMap :: RBBC -> IM.IntMap (IM.IntMap Int)
+netEdgeMap r =
+  let els = zip (networkEdges r) [1..]
+   in foldl' (\ac ((Edge f t), i) -> let med = IM.lookup f ac 
+                                      in case med of 
+                                           Just ed -> IM.insert f (IM.insert t i ed) ac  
+                                           Nothing -> IM.insert f (IM.singleton t i) ac 
+             ) IM.empty els 
+
 networkNeighbors :: RBBC -> IM.IntMap [Vertex]
 networkNeighbors r = IM.fromList $ zip vs (map getnn vs)
     where wis = weights r
@@ -67,7 +86,7 @@ networkNeighbors r = IM.fromList $ zip vs (map getnn vs)
           t = sink (network'RBBC r)
           vs = vertices $ graph (network'RBBC r)
           getnn v 
-            | v == s = map to $ take numSourceEdges (networkEdges r)
+            | v == s = map to (fst $ sourceTargetEdges r)
             | v == t = []
             | otherwise = let innerNNs = map (\e -> snd $ toTuple e) (outEdges (lattice r) v)
                              in case fromJust (IM.lookup v wis) >= 0 of
@@ -88,13 +107,29 @@ netEdgeCaps r =
                               True -> ((fromTuple (s,fromIntegral v),abs(w)):(fst ac), snd ac)
                               False -> (fst ac, (fromTuple (fromIntegral v,t),w):(snd ac))
               ) ([],[]) vs :: ([(Edge,Capacity)],[(Edge,Capacity)])
-   in (sourceEdges ++ M.toList js) ++ targetEdges -- ^ Source edges ++ Realization edges ++ Target edges
+   in (M.toList js ++ sourceEdges) ++ targetEdges -- ^ Source edges ++ Realization edges ++ Target edges
+
+sourceTargetEdges :: RBBC -> ([Edge],[Edge])
+sourceTargetEdges r = 
+  let wis = weights r
+      s = 0
+      t = size r + 1
+      vs = vertices $ lattice r
+      es = edges $ lattice r
+      js = interactions r
+      (sourceEdges,targetEdges) = 
+        foldr (\v ac -> let w = toRational $ fromJust $ IM.lookup v wis
+                         in case w < 0 of
+                              True -> (fromTuple (s,fromIntegral v):(fst ac), snd ac)
+                              False -> (fst ac, (fromTuple (fromIntegral v,t)):(snd ac))
+              ) ([],[]) vs :: ([Edge],[Edge])
+   in (sourceEdges,targetEdges)
 
 networkEdges :: RBBC -> [Edge]
-networkEdges r = map fst (netEdgeCaps r)
+networkEdges r = {-# SCC networkEDGEs #-} map fst (netEdgeCaps r)
 
 gsBCCapacities :: RBBC -> Capacities
 gsBCCapacities r = M.fromList (netEdgeCaps r)
 
-maxFlow :: GSNetwork -> ResidualGraph
+maxFlow :: GSNetwork -> IO Flow
 maxFlow fg = pushRelabel fg 

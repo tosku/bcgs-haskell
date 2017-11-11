@@ -18,6 +18,7 @@ library
   exposed-modules:     Data.Graph
                      , Data.Graph.BFS
                      , Test.Graph.BFS
+                     , Data.Status
                      , Data.Graph.MaxFlow
                      , Test.Graph.MaxFlow
                      , Data.Graph.Grid
@@ -45,6 +46,7 @@ library
                      , fgl >= 5.5.3.1
                      , prng >= 0.1.0.0
                      , either-unwrap >= 1.1
+                     , monad-parallel >= 0.7.2.2
   default-language:    Haskell2010
 
 executable bcgs-exe
@@ -79,6 +81,7 @@ executable bcgs-exe
                      , aeson
                      , prng >= 0.1.0.0
                      , either-unwrap >= 1.1
+                     , monad-parallel >= 0.7.2.2
                      , gnuplot >= 0.5.4.2
                      , fgl >= 5.5.3.1
   default-extensions:  DeriveGeneric

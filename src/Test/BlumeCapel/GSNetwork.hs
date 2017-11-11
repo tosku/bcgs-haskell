@@ -26,7 +26,7 @@ fastTests :: [Test]
 fastTests = [ test1
             {-, test3-}
             {-, test4-}
-            , test5
+            {-, test5-}
             ]
 
 test1 :: Test
@@ -81,21 +81,21 @@ test1 = do
         {-True -> testPassed name "passed!"-}
         {-False -> testFailed name $ (,) (show expe) (show out)-}
 
-test5 :: Test
-test5 = do
-  let name = "Test Max Flow"
-      l    = 8 :: L
-      d    = 2 :: D
-      latt = graphCubicPBC $ PBCSquareLattice l d
-      rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
-                        , crystalField = 1.5
-                        }
-      real = realization'RBBC rbbc latt
-      fg = network'RBBC real
-      mf = maxFlow fg
-      out = fromRational $ preflow $ mf
-      expe = 3.2
-  case out == expe of
-    True -> testPassed name "passed!"
-    False -> testFailed name $ (,) (show expe) (show $ steps mf)
+{-test5 :: Test-}
+{-test5 = do-}
+  {-let name = "Test Max Flow"-}
+      {-l    = 8 :: L-}
+      {-d    = 2 :: D-}
+      {-latt = graphCubicPBC $ PBCSquareLattice l d-}
+      {-rbbc = RandomBond { bondDisorder = Unimodal 901 0.3-}
+                        {-, crystalField = 1.5-}
+                        {-}-}
+      {-real = realization'RBBC rbbc latt-}
+      {-fg = network'RBBC real-}
+      {-mf = maxFlow fg-}
+      {-out = fromRational $ netFlow mf-}
+      {-expe = 3.2-}
+  {-case out == expe of-}
+    {-True -> testPassed name "passed!"-}
+    {-False -> testFailed name $ (,) (show expe) (show $ steps mf)-}
 

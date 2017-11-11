@@ -6,6 +6,11 @@ import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IM
 
+import qualified Data.Graph.Inductive as I
+import qualified Data.Graph.Inductive.Graph as G
+import qualified Data.Graph.Inductive.Query.MaxFlow as MF
+import qualified Data.Graph.Inductive.Query.BFS as IBFS
+
 import Data.Graph
 import Data.Graph.Grid
 import Data.BlumeCapel
@@ -29,35 +34,32 @@ graphTest1 = Graph { vertices = [1..7]
                    }
   
 
-fg = Network { graph = graphTest1
+tfg = Network { graph = graphTest1
              , source = 1
              , sink = 7
-             , capacities = M.fromList $ zip (edges (graph fg)) (map toRational $ repeat 1.0)
+             , capacities = M.fromList $ zip (edges (graph tfg)) (map toRational $ repeat 1.0)
              , flow = M.empty
              }
 
-  
-{-fg = TestGraph1-}
-{-cs = M.fromList $ zip (edges fg) (repeat 1.0)-}
-{-out = pushRelabel fg cs 1 7-}
 
 main :: IO ()
 main = do
   let name = "weights of RBBC"
-      l    = 6
-      d    = 2
-      latt = graphCubicPBC $ PBCSquareLattice l d
-      rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
-                        , crystalField = 1.8
+  let l    = 15
+  let d    = 2
+  let latt = graphCubicPBC $ PBCSquareLattice l d
+  let rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
+                        , crystalField = 1.7
                         }
-      real = realization'RBBC rbbc latt
-      ou = maxFlow fg
-      fg' = network'RBBC real
-      out = maxFlow fg'
+  let real = realization'RBBC rbbc latt
+  let ou = maxFlow tfg
+  let fg = network'RBBC real
+  let vs = map (\v -> (v,())) $ vertices (graph fg) :: [G.UNode]
+  let es = map (\(e, c) -> (from e,to e,fromRational c)) $ (M.toList $ capacities fg) :: [G.LEdge Double]
+  let mfg = G.mkGraph vs es :: I.Gr () Double
+  let expe = MF.maxFlow mfg 0 (sink fg) :: Double
 
-      {-cs = map toRational $ replicate (fromIntegral $ numEdges fg) 1.0-}
-      {-out = pushRelabel real (M.map toRational $ interactions real) 1 17-}
-
+  out <- maxFlow fg
       --bf = latticeBFS real 1
   --putStrLn "Getting max flow" 
   --putStrLn $ show $ maxFlow fg
@@ -66,9 +68,12 @@ main = do
   {-putStrLn "Getting gsfg realization"-}
   {-putStrLn $ show $ gsBCCapacities fg-}
   putStrLn "Getting max flow of test graph"
-  putStrLn $ show out 
-  putStrLn $ show $ steps out
-  putStrLn $ show $ (fromRational (preflow out) :: Double)
+  {-putStrLn "steps"-}
+  {-putStrLn $ show $ steps out-}
+  putStrLn "pushRelabel flow"
+  putStrLn $ show $ (fromRational out :: Double)
+  putStrLn "FGL flow"
+  putStrLn $ show expe
   {-putStrLn $ show $ netNeighbors out 1 -}
   {-putStrLn $ show $ netNeighbors out 2 -}
   {-putStrLn $ show $ netNeighbors out 5 -}
