@@ -144,13 +144,19 @@ initializeEdges net = do
                                       return $ ResidualEdge e c tf
            ) fes
 
+overflowing :: ResidualGraph -> IO [Vertex]
+overflowing rg = atomically $ do
+  let vs = vertices $ graph $ network rg
+  let s = source $ network rg
+  let t = sink $ network rg
+  xvs <- mapM (\v -> fmap ((,) v) $ excess rg v) vs
+  return $ map fst $ filter (\(v,x) -> x/=0 && v /= s && v /= t) xvs
+
 pushRelabel :: Network -> IO Flow
 pushRelabel net = do
   initg <- initializeResidualGraph net
-  {-mapM (\v -> printVertex initg v) $ vs-}
-  Par.sequence_ $ map (\v -> prl initg v (0) (-1) (0)) $ tail $ init vs
-  {-Par.sequence_ $ map (\v -> prl initg v (0) (-1) (0)) $ tail $ init vs-}
-  printVertex initg t
+  xvs <- overflowing initg
+  prl initg xvs 0
   netFlow initg
   where 
       g = graph net
@@ -158,64 +164,34 @@ pushRelabel net = do
       s = source net
       t = sink net
       vs = vertices g
-      prl :: ResidualGraph -> Vertex -> Height -> Excess -> Int -> IO ()
-      prl rg v h x steps = do 
-        print v
-        !(x',h',outf') <- atomically $ do
-          x'' <- excess rg v
-          h'' <- height rg v
-          outf <- outflow rg v
-          if x == x'' && h == h''
-             then retry
-             else do
-               orElse
-                 (relabel rg v)
-                 (pushNeighbors rg v)
-               return $ (x'', h'', outf)
-        let steps' = steps + 1 
-        if (x' == 0 && (fromIntegral h') > t)
-          then do 
-            return ()
-          else do
-            prl rg v h' x' (steps')
+      ses = sourceEdges net
+      prl :: ResidualGraph -> [Vertex] -> Int -> IO ()
+      prl rg [] _ = return ()
+      prl rg xvs steps = do
+        let neimap = netNeighborsMap rg
+        Par.mapM_ (\v -> atomically $ 
+          do
+            let (fns, rns) = fromJust $ IM.lookup v neimap
+            !changed <- discharge rg v
+            if changed then do
+                         return ()
+                       else do
+                         relabel rg v
+             ) xvs
+        xvs' <- overflowing rg
+        prl rg xvs' (steps+1)
 
-printVertex :: ResidualGraph -> Vertex -> IO ()
-printVertex rg v = do
-  (h ,x ,inf ,ouf ) <- atomically $ do
-    x' <- excess rg v
-    h' <- height rg v
-    inf' <- inflow rg v
-    ouf' <- outflow rg v
-    return (h',x',inf',ouf')
-  putStrLn $ show v 
-    ++ " h: "++ show h 
-    ++ ", exc: " ++ show (fromRational x) 
-    ++ ", infl: " ++ show (fromRational inf)
-    ++ ", outf: " ++ show (fromRational ouf) 
-
-inflow :: ResidualGraph -> Vertex -> STM Flow
-inflow g v = do
-  let ns  = netNeighbors (netNeighborsMap g) v 
-  let reds = map (\n -> fromTuple (n,v)) $ snd ns
-  foldM (\ac e -> ((+) ac) <$> edgeFlow g e) 0 reds 
-
-outflow :: ResidualGraph -> Vertex -> STM Flow
-outflow g v = do
-  let ns  = netNeighbors (netNeighborsMap g) v 
-  let feds = map (\n -> fromTuple (v,n)) $ fst ns
-  foldM (\ac e -> ((+) ac) <$> edgeFlow g e) 0 feds 
-
-pushNeighbors :: ResidualGraph -> Vertex -> STM ()
-pushNeighbors g v = do
-  let neimap = getNetNeighborsMap $ graph $ network g
+discharge :: ResidualGraph -> Vertex -> STM Bool
+discharge g v = do
+  let neimap = netNeighborsMap g
   let (fns, rns) = fromJust $ IM.lookup v neimap
   let feds = map (\n -> fromTuple (v,n)) fns
   let reds = map (\n -> fromTuple (n,v)) rns
-  mapM (push g) feds 
-  mapM (pull g) reds
-  return ()
+  !changed <- foldM (\ac e -> fmap ((||) ac) (push g e)) False feds
+  !changed' <- foldM (\ac e -> fmap ((||) ac) (pull g e)) changed reds
+  return changed'
 
-push :: ResidualGraph -> Edge -> STM Excess
+push :: ResidualGraph -> Edge -> STM Bool
 push g e = do 
   let u = from e
   let v = to e
@@ -228,14 +204,14 @@ push g e = do
   f <- edgeFlow g e
   let nvs = netVertices g
   let xf = min xu (c - f)
-  if hu >= hv + 1 then do
+  if (hu >= hv + 1) && xf > 0 then do
     updateEdge g e (f + xf)
-    {-updateVertex g u hu (xu - xf)-}
-    {-updateVertex g v hv (xv + xf)-}
-    return xf
-  else return xf
+    updateVertex g u hu (xu - xf)
+    updateVertex g v hv (xv + xf)
+    return True
+  else return False
 
-pull :: ResidualGraph -> Edge -> STM Excess
+pull :: ResidualGraph -> Edge -> STM Bool
 pull g e = do 
   let u = from e
   let v = to e
@@ -247,12 +223,12 @@ pull g e = do
   f <- edgeFlow g e
   let nvs = netVertices g
   let xf = min xv f
-  if hv >= hu + 1 then do 
+  if (hv >= hu + 1)  && xf > 0 then do 
     updateEdge g e (f - xf)
-    {-updateVertex g u hu (xu + xf)-}
-    {-updateVertex g v hv (xv - xf)-}
-    return xf
-  else return xf
+    updateVertex g u hu (xu + xf)
+    updateVertex g v hv (xv - xf)
+    return True
+  else return False
 
 relabel :: ResidualGraph -> Vertex -> STM ()
 relabel g v = do
@@ -268,8 +244,9 @@ relabel g v = do
   neighborHeights <- (++) <$> (mapM (\(e,c) -> height g (to e)) gcfs) <*> mapM (\(e,c) -> height g (from e)) rcfs
   let newh = 1 + minimum neighborHeights
   case any (\nh -> hv > nh) neighborHeights || neighborHeights == [] of
-     False -> updateVertex g v newh xv
-     True -> retry
+     False -> do
+       updateVertex g v newh xv
+     True -> return ()
 
 updateVertex :: ResidualGraph -> Vertex -> Height -> Excess -> STM ()
 updateVertex g v nh nx = do 
@@ -321,3 +298,40 @@ edgeFlow g e = do
   let l = graph $ network g
   let (ResidualEdge ne c tf) = fromJust $ IM.lookup (fromJust $ edgeIndex l e) (netEdges g)
   readTVar tf
+
+printVertex :: ResidualGraph -> Vertex -> IO ()
+printVertex rg v = do
+  (h ,x ,inf ,ouf ) <- atomically $ do
+    x' <- excess rg v
+    h' <- height rg v
+    inf' <- inflow rg v
+    ouf' <- outflow rg v
+    return (h',x',inf',ouf')
+  putStrLn $ show v 
+    ++ " h: "++ show h 
+    ++ ", exc: " ++ show (fromRational x) 
+    ++ ", infl: " ++ show (fromRational inf)
+    ++ ", outf: " ++ show (fromRational ouf) 
+
+printEdge :: ResidualGraph -> Edge -> IO ()
+printEdge rg e = do
+  (c,f) <- atomically $ do
+    let c' = edgeCapacity rg e
+    f' <- edgeFlow rg e
+    return (c',f')
+  putStrLn $ show e 
+    ++ " c: "++ show (fromRational c) 
+    ++ ", f: " ++ show (fromRational f) 
+
+inflow :: ResidualGraph -> Vertex -> STM Flow
+inflow g v = do
+  let ns  = netNeighbors (netNeighborsMap g) v 
+  let reds = map (\n -> fromTuple (n,v)) $ snd ns
+  foldM (\ac e -> ((+) ac) <$> edgeFlow g e) 0 reds 
+
+outflow :: ResidualGraph -> Vertex -> STM Flow
+outflow g v = do
+  let ns  = netNeighbors (netNeighborsMap g) v 
+  let feds = map (\n -> fromTuple (v,n)) $ fst ns
+  foldM (\ac e -> ((+) ac) <$> edgeFlow g e) 0 feds 
+

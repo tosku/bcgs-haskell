@@ -45,7 +45,7 @@ tfg = Network { graph = graphTest1
 main :: IO ()
 main = do
   let name = "weights of RBBC"
-  let l    = 15
+  let l    = 30
   let d    = 2
   let latt = graphCubicPBC $ PBCSquareLattice l d
   let rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
