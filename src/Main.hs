@@ -45,11 +45,11 @@ tfg = Network { graph = graphTest1
 main :: IO ()
 main = do
   let name = "weights of RBBC"
-  let l    = 30
-  let d    = 2
+  let l    = 20
+  let d    = 3
   let latt = graphCubicPBC $ PBCSquareLattice l d
   let rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
-                        , crystalField = 1.7
+                        , crystalField = 2.7
                         }
   let real = realization'RBBC rbbc latt
   let ou = maxFlow tfg
@@ -73,7 +73,7 @@ main = do
   putStrLn "pushRelabel flow"
   putStrLn $ show $ (fromRational out :: Double)
   putStrLn "FGL flow"
-  putStrLn $ show expe
+  {-putStrLn $ show expe-}
   {-putStrLn $ show $ netNeighbors out 1 -}
   {-putStrLn $ show $ netNeighbors out 2 -}
   {-putStrLn $ show $ netNeighbors out 5 -}
