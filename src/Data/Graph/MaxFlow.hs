@@ -32,7 +32,6 @@ module Data.Graph.MaxFlow
 
 import Data.List
 import Data.Maybe
-import Data.Status
 import qualified Data.Vector as V
 import qualified Data.Map.Lazy as M
 import qualified Data.IntMap.Lazy as IM
