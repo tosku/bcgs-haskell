@@ -18,9 +18,7 @@ library
   exposed-modules:     Data.Graph
                      , Data.Graph.BFS
                      , Test.Graph.BFS
-                     , Data.Status
-                     , Data.Graph.MaxFlow
-                     , Test.Graph.MaxFlow
+                     , Data.Graph.PushRelabel.STM
                      , Data.Graph.Grid
                      , Test.Graph.Grid
                      , Data.BlumeCapel
@@ -56,8 +54,7 @@ executable bcgs-exe
   other-modules:       Data.Graph
                      , Data.Graph.BFS
                      , Test.Graph.BFS
-                     , Data.Graph.MaxFlow
-                     , Test.Graph.MaxFlow
+                     , Data.Graph.PushRelabel.STM
                      , Data.Graph.Grid
                      , Test.Graph.Grid
                      , Data.BlumeCapel

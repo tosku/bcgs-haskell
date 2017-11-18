@@ -35,8 +35,8 @@ data BFS = BFS { frontier :: S.Set Vertex
                , topSort :: [Vertex]
                } deriving (Eq, Show)
 
-initialBFS :: Graph -> Vertex -> BFS
-initialBFS g s = BFS { frontier = S.singleton s
+initialBFS :: Vertex -> BFS
+initialBFS s = BFS { frontier = S.singleton s
                       , level = IM.fromList [(s,0)]
                       , parent= IM.empty
                       , maxLevel = 0
@@ -46,7 +46,7 @@ initialBFS g s = BFS { frontier = S.singleton s
 -- | BFS for implicit neighbor definition (grids, infinite graphs)
 bfs :: Graph -> Vertex -> BFS
 bfs g s = breadthFirstSearch sbfs
-  where sbfs = initialBFS g s
+  where sbfs = initialBFS s
         breadthFirstSearch b
           | S.empty == frontier b = b
           | otherwise = bbfs
@@ -68,10 +68,10 @@ bfs g s = breadthFirstSearch sbfs
                              })
 
 -- | BFS for graph with provided vertex adjacencyList
-adjBFS :: Graph -> IM.IntMap [Vertex] -> Vertex -> BFS
-adjBFS g neimap s = breadthFirstSearch sbfs
-  where memoNeighbors v = fromJust $ IM.lookup v neimap
-        sbfs = initialBFS g s
+adjBFS :: IM.IntMap [Vertex] -> Vertex -> BFS
+adjBFS neimap s = breadthFirstSearch sbfs
+  where memoNeighbors v = IM.lookup v neimap
+        sbfs = initialBFS s
         breadthFirstSearch b
           | S.empty == frontier b = b
           | otherwise = bbfs
@@ -79,7 +79,10 @@ adjBFS g neimap s = breadthFirstSearch sbfs
                   newLevel = oldLevel + 1
                   oldLevels = level b
                   oldFrontiers = frontier b
-                  frontPar = let toCheck = foldl' (\ac v -> S.union ac (S.fromList (zip (memoNeighbors v) (repeat v)))) S.empty oldFrontiers
+                  frontPar = let toCheck = foldl' (\ac v -> S.union ac (S.fromList (zip ((\mns -> case mns of 
+                                                                                                    Nothing -> []
+                                                                                                    Just ns -> ns) 
+                                                                                        (memoNeighbors v)) (repeat v)))) S.empty oldFrontiers
                                 in S.filter (\(n, p) -> not $ IM.member n oldLevels) toCheck
                   newFrontiers = S.map fst frontPar
                   oldParents = parent b

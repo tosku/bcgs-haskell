@@ -17,7 +17,7 @@ import qualified Data.Graph.Inductive.Query.BFS as IBFS
 
 import Data.Graph
 import Data.Graph.Grid
-import Data.Graph.MaxFlow
+import Data.Graph.PushRelabel.STM
 import Data.Graph.BFS
 import Data.BlumeCapel
 import Data.BlumeCapel.GSNetwork

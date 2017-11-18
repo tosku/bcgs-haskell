@@ -15,7 +15,7 @@ import Data.Graph
 import Data.Graph.Grid
 import Data.BlumeCapel
 import Data.BlumeCapel.GSNetwork
-import Data.Graph.MaxFlow
+import Data.Graph.PushRelabel.Pure
 
 
 graphTest1 = Graph { vertices = [1..7]
@@ -45,11 +45,11 @@ tfg = Network { graph = graphTest1
 main :: IO ()
 main = do
   let name = "weights of RBBC"
-  let l    = 20
+  let l    = 16
   let d    = 3
   let latt = graphCubicPBC $ PBCSquareLattice l d
-  let rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
-                        , crystalField = 2.7
+  let rbbc = RandomBond { bondDisorder = Unimodal 901 2.8
+                        , crystalField = 1.8
                         }
   let real = realization'RBBC rbbc latt
   let ou = maxFlow tfg
@@ -59,7 +59,7 @@ main = do
   let mfg = G.mkGraph vs es :: I.Gr () Double
   let expe = MF.maxFlow mfg 0 (sink fg) :: Double
 
-  out <- maxFlow fg
+  let out = maxFlow fg
       --bf = latticeBFS real 1
   --putStrLn "Getting max flow" 
   --putStrLn $ show $ maxFlow fg
@@ -73,7 +73,7 @@ main = do
   putStrLn "pushRelabel flow"
   putStrLn $ show $ (fromRational out :: Double)
   putStrLn "FGL flow"
-  {-putStrLn $ show expe-}
+  putStrLn $ show expe
   {-putStrLn $ show $ netNeighbors out 1 -}
   {-putStrLn $ show $ netNeighbors out 2 -}
   {-putStrLn $ show $ netNeighbors out 5 -}

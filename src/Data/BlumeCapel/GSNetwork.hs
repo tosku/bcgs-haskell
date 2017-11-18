@@ -29,7 +29,7 @@ import qualified Data.Vector as V
 import qualified Data.IntMap.Lazy as IM
 
 import Data.Graph
-import Data.Graph.MaxFlow
+import Data.Graph.PushRelabel.Pure
 import Data.BlumeCapel
 
 -- | Ground state flow graph from rbbc realization
@@ -131,5 +131,5 @@ networkEdges r = {-# SCC networkEDGEs #-} map fst (netEdgeCaps r)
 gsBCCapacities :: RBBC -> Capacities
 gsBCCapacities r = M.fromList (netEdgeCaps r)
 
-maxFlow :: GSNetwork -> IO Flow
+maxFlow :: GSNetwork -> Flow
 maxFlow fg = pushRelabel fg 

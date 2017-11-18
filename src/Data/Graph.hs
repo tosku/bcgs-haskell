@@ -20,6 +20,8 @@ module Data.Graph
     , toTuple
     , reverseEdge
     , reverseEdges
+    , getReverseNeighbors
+    , reverseGraph
     , adjacentEdges
     , edgesFromNeighbors
     , adjacencyMap
@@ -34,6 +36,7 @@ module Data.Graph
 
 
 import Data.List
+import Data.Maybe
 import Data.Natural
 import qualified Data.Map.Lazy as M
 import qualified Data.IntMap.Lazy as IM
@@ -112,3 +115,14 @@ mapEdgeIndx g e = M.lookup e $ edgeMap g
 adjacencyMap :: Graph -> IM.IntMap [Vertex]
 adjacencyMap g = IM.fromList $ map (\v -> (v, (neighbors g v))) vs
                  where vs = vertices g
+
+getReverseNeighbors :: [Vertex] -> [Edge] -> IM.IntMap [Vertex]
+getReverseNeighbors vs es = IM.fromList $ zip vs (map (\v -> map from (filter (\re -> to re == v) es)) vs)
+
+reverseGraph :: Graph -> Graph
+reverseGraph g = Graph { vertices = vertices g
+                       , edges = reverseEdges g
+                       , neighbors = (\v -> fromJust (IM.lookup v (getReverseNeighbors (vertices g) (edges g))))
+                       , outEdges = (\v -> map (\n -> Edge v n) ((neighbors (reverseGraph g)) v))
+                       , edgeIndex = mapEdgeIndx $ reverseGraph g
+                       }
