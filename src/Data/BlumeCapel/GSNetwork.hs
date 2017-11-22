@@ -131,5 +131,5 @@ networkEdges r = {-# SCC networkEDGEs #-} map fst (netEdgeCaps r)
 gsBCCapacities :: RBBC -> Capacities
 gsBCCapacities r = M.fromList (netEdgeCaps r)
 
-maxFlow :: GSNetwork -> Flow
+maxFlow :: GSNetwork -> IO (Either String ResidualGraph)
 maxFlow fg = pushRelabel fg 
