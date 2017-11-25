@@ -46,21 +46,23 @@ import qualified Data.Graph.Inductive.Query.BFS as IBFS
 
 
 import Data.Graph
-import Data.Graph.BFS
+import qualified Data.Graph.BFS as BFS
 
 type Capacity = Rational 
 type Capacities = M.Map Edge Capacity 
 type Flow = Capacity
 type Height = Int
 type Excess = Capacity
+type Level = Int
 
-data ResidualVertex = ResidualVertex !Vertex !Height !Excess
+data ResidualVertex = ResidualVertex !Vertex !Level !Height !Excess
   deriving (Eq)
 
 instance Show ResidualVertex where
-  show (ResidualVertex v h x) =
-    "RVertex " ++ show v ++  " " ++
-      show h ++ " " ++
+  show (ResidualVertex v l h x) =
+    "RVertex " ++ show v ++  " level: " ++
+      show l ++ " height: " ++
+      show h ++ " excess: " ++
       show (fromRational x :: Double)
 
 data ResidualEdge = ResidualEdge !Edge !Capacity !Flow
@@ -92,6 +94,7 @@ data ResidualGraph = ResidualGraph { network :: Network
                                    , netEdges :: ResidualEdges 
                                    , netNeighborsMap :: IM.IntMap ([Vertex], [Vertex])
                                    , overflowing :: IM.IntMap Set.IntSet
+                                   , hoverflowing :: IM.IntMap Set.IntSet
                                    , steps :: Int
                                    }
                        deriving (Show,Eq)
@@ -104,7 +107,18 @@ initializeResidualGraph net =
                     , netVertices = vs 
                     , netEdges = es 
                     , netNeighborsMap = getNetNeighborsMap $ graph net 
-                    , overflowing = IM.singleton 0 (Set.fromList $ getOverflowing $ initializeResidualGraph net)
+                    , overflowing = 
+                      let ovfs = Set.fromList $ getOverflowing $ initializeResidualGraph net
+                          bfs =  BFS.bfs (graph net) (source net)
+                          maxLevel = BFS.maxLevel bfs
+                          rg = initializeResidualGraph net
+                       in Set.foldl' 
+                            (\ac v -> 
+                               IM.adjust (\ps -> Set.insert v ps) (level rg v) ac
+                            ) (IM.fromList (zip [1..maxLevel] (repeat Set.empty))) ovfs
+                    , hoverflowing = 
+                      let ovfs = Set.fromList $ getOverflowing $ initializeResidualGraph net
+                       in IM.singleton 0 ovfs
                     , steps = 0 
                     } 
 
@@ -155,10 +169,18 @@ initializeVertices net =
       t = sink net
       sh = fromIntegral $ numVertices g
       ses = sourceEdges net
-      zvs = IM.fromList $ zip (vertices g) (map (\v -> if v == t then ResidualVertex t 0 0 else ResidualVertex v 0 0) $ vertices g)
+      vs = vertices $ graph net
+      fvs = map (\v -> (v,())) $ vertices g :: [G.UNode]
+      es = edges $ graph net
+      fes = map (\(Edge f t) -> (f,t,1.0)) es :: [G.LEdge Double]
+      mfg = G.mkGraph fvs fes :: I.Gr () Double
+      {-levels = IM.fromList $ IBFS.level s mfg-}
+      levels = BFS.level $ BFS.bfs (graph net) (source net)
+      level v = fromJust $ IM.lookup v levels
+      zvs = IM.fromList $ zip (vertices g) (map (\v -> if v == t then ResidualVertex t (level v) 0 0 else ResidualVertex v (level v) 0 0) $ vertices g)
       (sx, nvs) = foldl' (\(cx,ac) (e,c) -> let v = to e
-                                             in (cx-c, IM.adjust (const (ResidualVertex v 0 c)) v ac)) (0, zvs) ses
-   in  IM.insert s (ResidualVertex s sh sx) nvs
+                                             in (cx-c, IM.adjust (const (ResidualVertex v (level v) 0 c)) v ac)) (0, zvs) ses
+   in IM.insert s (ResidualVertex s 0 sh sx) nvs
 
 initializeEdges :: Network -> ResidualEdges
 initializeEdges net =
@@ -197,10 +219,10 @@ pushRelabel net = do
   let t = sink net
   let insouts = filter (\v -> v /= s && v /= t && inflow res v < outflow res v) nvs
   let xsflows = filter (\v -> v /= s && v /= t && inflow res v - outflow res v /= excess res v) nvs
-  let ofvs = IM.foldl (\ac ovs -> Set.union ac ovs) Set.empty $ overflowing res
+  let ofvs = IM.foldl (\ac ovs -> Set.union ac ovs) Set.empty $ hoverflowing res
   let notofvs = filter (\ ov -> 
-                          let (ResidualVertex v h x) = fromJust (IM.lookup ov (netVertices res)) 
-                              mh = (IM.lookup h (overflowing res)) 
+                          let (ResidualVertex v l h x) = fromJust (IM.lookup ov (netVertices res)) 
+                              mh = (IM.lookup h (hoverflowing res)) 
                            in case mh of
                                 Nothing -> True
                                 Just os -> not $ Set.member ov os
@@ -217,16 +239,16 @@ pushRelabel net = do
                   then return $ Left $ "Error vertex excess " ++ show xsflows
                   else
                     if not $ Set.null errovfs 
-                      then return $ Left $ "Error not really overflowing " ++ show errovfs
-                      else return $ Left $ "Error not in overflowing " ++ show notofvs
-                        ++ " overflowings are " ++ show (overflowing res)
+                      then return $ Left $ "Error not really hoverflowing " ++ show errovfs
+                      else return $ Left $ "Error not in hoverflowing " ++ show notofvs
+                        ++ " hoverflowings are " ++ show (hoverflowing res)
                         ++ " nevertices are " ++ show (netVertices res)
                   
 prl :: ResidualGraph -> ResidualGraph
 prl !rg =
   let g = graph $ network rg
       sh = numVertices g
-      ovfs = overflowing rg
+      ovfs = hoverflowing rg
       (h,ovs) = IM.findMax ovfs
       u = Set.findMin ovs
       osteps = steps rg
@@ -253,18 +275,14 @@ argalios rg steps =
       t = sink $ network rg
       es = edges g
       vs = vertices g
-      svs = Set.fromList $ map to $ filter (\e -> from e == s) es
-      tvs = Set.fromList $ map from $ filter (\e -> to e == t) es
-      rg' = prePull $ prePush rg
       olf = netFlow rg
+      !rg' = prePush $ prePull rg
       nfl = netFlow rg'
       steps' = steps + 1
-      oovfls = getOverflowing rg
-      novfls = getOverflowing rg'
-      ovts = Set.intersection (Set.fromList (getOverflowing rg')) tvs
+      oovfls = overflowing rg
+      novfls = overflowing rg'
    in if nfl == olf 
          then 
-           {-if Set.null ovts || steps > 85-}
            if oovfls == novfls
               then rg' {steps = steps'}
               else argalios rg' steps'
@@ -274,74 +292,53 @@ argalios rg steps =
 -- (U) and ending edges that are the start of sink edges (V)
 prePush :: ResidualGraph -> ResidualGraph 
 prePush rg = 
-  let g = graph $ network rg
-      s = source $ network rg
-      t = sink $ network rg
-      es = edges g
-      vs = vertices g
-      svs = Set.fromList $ map to $ filter (\e -> from e == s) es
-      tvs = Set.fromList $ map from $ filter (\e -> to e == t) es
-      uvEdges = filter (\(Edge u v) -> 
-        Set.member u svs && Set.member v tvs) es
-      pp :: ResidualGraph -> ResidualGraph 
-      pp rgr = 
-             let !rg' = 
-                   {-let !rgr' = steepBFSRelabel rgr-}
-                   let !rgr' = bfsRelabel rgr
-                       !rgr'' = Set.foldl' (\ac v -> pushNeighbors ac v) rgr' svs
-                    in Set.foldl' (\ac v -> pushNeighbors ac v) (rgr'') tvs
-                 !ofl = netFlow rgr
-                 !nfl = netFlow rg'
-              in if nfl == ofl 
-                    then rg'
-                    else pp rg'
- in pp rg
+  let ovfs = overflowing rg
+   in IM.foldl' (\ac lset -> 
+         Set.foldl (\ac' v -> pushNeighbors ac' v)
+         ac lset
+      ) rg ovfs
+
+prePull :: ResidualGraph -> ResidualGraph 
+prePull rg = 
+  let ovfs = overflowing rg
+      rg' = bfsRelabel rg
+   in IM.foldr' (\lset ac -> 
+         Set.foldl (\ac' v -> pullNeighbors ac' v)
+         ac lset
+               ) rg' ovfs
 
 pushNeighbors :: ResidualGraph -> Vertex -> ResidualGraph
 pushNeighbors g v =
   let neimap = netNeighborsMap g
+      xv = excess g v
       (fns, rns) = fromJust $ IM.lookup v neimap
       feds = map (\n -> fromTuple (v,n)) fns
-      (changed, g') = foldl' (\(ch,ac) e -> 
-        let mv = push ac e
-         in case mv of 
-              Nothing -> (ch,ac)
-              Just g'' -> (True,g'')) (False,g) feds
-   in g'
-
-prePull :: ResidualGraph -> ResidualGraph 
-prePull rg = 
-  let g = graph $ network rg
-      s = source $ network rg
-      t = sink $ network rg
-      es = edges g
-      vs = vertices g
-      svs = Set.fromList $ map to $ filter (\e -> from e == s) es
-      tvs = Set.fromList $ map from $ filter (\e -> to e == t) es
-      pp :: ResidualGraph -> ResidualGraph 
-      pp rgr = 
-         let !rg' = 
-               let !rgr' = bfsRelabel rgr
-                   !rgr'' = Set.foldl' (\ac v -> pullNeighbors ac v) rgr' tvs
-                in Set.foldl' (\ac v -> pullNeighbors ac v) (rgr'') svs
-             !ofl = overflowing rgr
-             !nfl = overflowing rg'
-          in if nfl == ofl 
-                then rg'
-                else rg'
- in pp rg
+   in if xv > 0 
+         then
+            let (changed, g') = 
+                   foldl' (\(ch,ac) e -> 
+                       let mv = push ac e
+                       in case mv of 
+                            Nothing -> (ch,ac)
+                            Just g'' -> (True,g'')) (False,g) feds
+               in g'
+         else g
 
 pullNeighbors :: ResidualGraph -> Vertex -> ResidualGraph
 pullNeighbors g v =
   let neimap = netNeighborsMap g
       (fns, rns) = fromJust $ IM.lookup v neimap
       reds = map (\n -> fromTuple (n,v)) rns
-      (changed, g') = foldl' (\(ch,ac) e -> 
-        let mv = pull ac e
-         in case mv of 
-              Nothing -> (ch,ac)
-              Just g'' -> (True,g'')) (False,g) reds
-   in g'
+      xv = excess g v
+   in if xv > 0 
+         then 
+           let (changed, g') = foldl' (\(ch,ac) e -> 
+                let mv = pull ac e
+                 in case mv of 
+                      Nothing -> (ch,ac)
+                      Just g'' -> (True,g'')) (False,g) reds
+           in g'
+           else g
 
 discharge :: ResidualGraph -> Vertex -> Maybe ResidualGraph
 discharge g v =
@@ -436,7 +433,7 @@ reRelabel rg =
       vs = vertices g
       sh = numVertices g
    in foldl' (\ ac v -> 
-             let (ResidualVertex _ oh ox) = fromJust $ IM.lookup v (netVertices ac)
+             let (ResidualVertex _ _ oh ox) = fromJust $ IM.lookup v (netVertices ac)
               in updateHeight ac v oh 0
              ) rg vs 
 
@@ -450,31 +447,15 @@ bfsRelabel rg =
       sh = numVertices g
       (tlvs,slvs) = residualDistances rg
       rg' = foldl' (\ ac (v,l) -> 
-             let (ResidualVertex _ oh ox) = fromJust $ IM.lookup v (netVertices ac)
+             let (ResidualVertex _ _ oh ox) = fromJust $ IM.lookup v (netVertices ac)
                  h = sh + l
               in updateHeight ac v oh h
                 ) rg $ IM.toList slvs 
       rg'' = foldl' (\ ac (v,h) ->
-             let (ResidualVertex _ oh ox) = fromJust $ IM.lookup v (netVertices ac)
+             let (ResidualVertex _ _ oh ox) = fromJust $ IM.lookup v (netVertices ac)
               in updateHeight ac v oh h
                     ) rg' $ IM.toList tlvs
  in rg'' {steps = steps rg + 1}
-
-steepBFSRelabel :: ResidualGraph -> ResidualGraph
-steepBFSRelabel rg =
-  let es = netEdges rg
-      g = graph $ network rg
-      s = source $ network rg
-      t = sink $ network rg
-      vs = vertices g
-      sh = numVertices g
-      revs = saturatedReverseNeighbors (map snd (IM.toList es))
-      tlvs = level $ adjBFS revs t
-      rg' = foldl' (\ ac (v,h) ->
-             let (ResidualVertex _ oh ox) = fromJust $ IM.lookup v (netVertices ac)
-              in updateHeight ac v oh h
-                     ) rg $ IM.toList tlvs
-   in rg'
 
 -- | (distance from sink , distance from source (only those that don't connect
 -- to sink))
@@ -503,7 +484,6 @@ residualDistances rg =
                Just ns -> IM.insert u (v:ns) ac
              ) tfsatnbs tbes
       {-tlvs = level $ adjBFS tsatnbs t-}
-
       fvs = map (\v -> (v,())) $ vertices g :: [G.UNode]
       fres = map (\(ResidualEdge e c f) -> toTuple (reverseEdge e)) tres
              ++ map (\(ResidualEdge e c f) -> toTuple e) tbes
@@ -538,7 +518,8 @@ updateHeight g v oh nh =
   let netvs = netVertices g
       nv = fromJust $ IM.lookup v netvs
       x = excess g v
-      ovfs = overflowing g
+      l = level g v
+      ovfs = hoverflowing g
       s = source $ network g
       t = sink $ network g
       newovfs = 
@@ -558,8 +539,8 @@ updateHeight g v oh nh =
                          Nothing -> IM.insert nh (Set.singleton v) ovfs'
                          Just nhset -> IM.adjust (Set.insert v) nh ovfs'
   in if v == t || v == s then g
-                else g { netVertices = IM.insert v (ResidualVertex v nh x) netvs
-                       , overflowing = newovfs
+                else g { netVertices = IM.insert v (ResidualVertex v l nh x) netvs
+                       , hoverflowing = newovfs
                        } 
 
 updateExcess :: ResidualGraph -> Vertex -> Excess -> ResidualGraph
@@ -567,28 +548,48 @@ updateExcess g v nx =
   let netvs = netVertices g
       nv = fromJust $ IM.lookup v netvs
       h = height g v
+      l = level g v
+      hovfs = hoverflowing g
       ovfs = overflowing g
       s = source $ network g
       t = sink $ network g
+      newhovfs = 
+        if v == s || v == t
+           then hovfs
+           else
+             let hovfs' = IM.update (\hvs -> 
+                         let nhset = Set.delete v hvs
+                          in if Set.null nhset
+                                      then Nothing 
+                                      else Just nhset) h hovfs
+              in if nx == 0
+                then 
+                  hovfs'
+                else 
+                  let mnhset = IM.lookup h hovfs'
+                   in case mnhset of 
+                        Nothing -> IM.insert h (Set.singleton v) hovfs'
+                        Just nhset -> IM.adjust (Set.insert v) h hovfs'
       newovfs = 
         if v == s || v == t
            then ovfs
            else
-             let ovfs' = IM.update (\hvs -> 
-                         let nhset = Set.delete v hvs
-                          in if Set.null nhset
+             let ovfs' = IM.update (\lvs -> 
+                         let lset = Set.delete v lvs
+                          in if Set.null lset
                                       then Nothing 
-                                      else Just nhset) h ovfs
+                                      else Just lset) l ovfs
               in if nx == 0
                 then 
                   ovfs'
                 else 
-                  let mnhset = IM.lookup h ovfs'
-                   in case mnhset of 
-                        Nothing -> IM.insert h (Set.singleton v) ovfs'
-                        Just nhset -> IM.adjust (Set.insert v) h ovfs'
+                  let mlset = IM.lookup l ovfs'
+                   in case mlset of 
+                        Nothing -> IM.insert l (Set.singleton v) ovfs'
+                        Just lset -> IM.adjust (Set.insert v) l ovfs'
    in if v == t then g
-                else g { netVertices = IM.insert v (ResidualVertex v h nx) netvs
+                else g { netVertices = IM.insert v (ResidualVertex v l h nx) netvs
+                       , hoverflowing = newhovfs
                        , overflowing = newovfs
                        } 
 
@@ -605,7 +606,7 @@ netFlow :: ResidualGraph -> Flow
 netFlow g = inflow g (sink (network g))
 
 vertex :: ResidualVertex -> Vertex
-vertex (ResidualVertex v _ _) = v
+vertex (ResidualVertex v _ _ _) = v
 
 height :: ResidualGraph -> Vertex -> Height
 height rg v =
@@ -613,7 +614,7 @@ height rg v =
       s = source $ network rg
       t = sink $ network rg
       nvs = fromIntegral $ numVertices g
-      (ResidualVertex nv h x) = fromJust $ IM.lookup v (netVertices rg)
+      (ResidualVertex nv l h x) = fromJust $ IM.lookup v (netVertices rg)
    in h
 
 
@@ -623,8 +624,17 @@ excess rg v =
       s = source $ network rg
       t = sink $ network rg
       nvs = fromIntegral $ numVertices g
-      (ResidualVertex nv h x) = fromJust $ IM.lookup v (netVertices rg)
+      (ResidualVertex nv l h x) = fromJust $ IM.lookup v (netVertices rg)
    in x
+
+level :: ResidualGraph -> Vertex -> Int
+level rg v =
+  let g = graph $ network rg
+      s = source $ network rg
+      t = sink $ network rg
+      nvs = fromIntegral $ numVertices g
+      (ResidualVertex nv l h x) = fromJust $ IM.lookup v (netVertices rg)
+   in l
 
 edgeCapacity :: ResidualGraph -> Edge -> Capacity
 edgeCapacity g e = let (ResidualEdge ne c f) = fromJust $ IM.lookup (fromJust $ edgeIndex (graph $ network g) e) (netEdges g)

@@ -98,12 +98,13 @@ getInteractions bc es =
     otherwise -> M.empty
 
 dichotomousJs :: [Edge] -> Seed -> DisorderStrength -> Js
-dichotomousJs es s p = do
-  let p' = case (p < 0) || (p > 1) of
+dichotomousJs es s r = do
+  let r' = case (r < 0) || (r > 1) of
            True -> 1
-           False -> p
-      jWeak = 1.0 - p'
-      jStrong = 2.0 - jWeak
+           False -> r
+      -- | r=1-(jw/js)
+      jWeak = 2 * (1 - r') / (2 - r')
+      jStrong = 2 / (2 - r')
       n = length es
       strongjs = IM.fromList $ zip [1..n] (repeat jStrong)
       weakindxs = sample (getRNG s :: MTRNG) (quot n 2) [1..n]
@@ -111,11 +112,11 @@ dichotomousJs es s p = do
    in M.fromList $ zip es (map (toRational . snd) $ IM.toList js)
 
 unimodalJs :: [Edge] -> Seed -> DisorderStrength -> Js
-unimodalJs es s p = 
+unimodalJs es s r = 
   let n = length es
       rng = getRNG s :: MTRNG
       μ = 1
-      σ = p
+      σ = r
       f = 0
       t = 2
       js = IM.fromList $ zip [1..] (map toRational (truncatedNormalSample rng μ σ f t n))

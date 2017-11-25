@@ -4,6 +4,7 @@ import Data.List
 import Data.Maybe
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.IntSet as Set
 import qualified Data.IntMap.Strict as IM
 
 import qualified Data.Graph.Inductive as I
@@ -45,12 +46,12 @@ tfg = Network { graph = graphTest1
 main :: IO ()
 main = do
   let name = "weights of RBBC"
-  let l    = 30
-  let d    = 2
+  let l    = 20
+  let d    = 3
   let latt = graphCubicPBC $ PBCSquareLattice l d
-  {-let rbbc = RandomBond { bondDisorder = Dichotomous 901 0.8-}
-  let rbbc = RandomBond { bondDisorder = Unimodal 901 2.8
-                        , crystalField = 2.123431
+  let rbbc = RandomBond { bondDisorder = Dichotomous 901 0.95
+  {-let rbbc = RandomBond { bondDisorder = Unimodal 901 1.15-}
+                        , crystalField = 2.887
                         }
   let real = realization'RBBC rbbc latt
   let ou = maxFlow tfg
@@ -69,21 +70,19 @@ main = do
   {-putStrLn "Getting gsfg realization"-}
   {-putStrLn $ show $ gsBCCapacities fg-}
   putStrLn "Getting max flow of test graph"
-  {-putStrLn "steps"-}
-  {-putStrLn $ show $ steps out-}
   putStrLn "pushRelabel flow"
   out <- case eout of 
            Left err -> print err 
            Right gmf -> do
-             print $ show $ netEdges gmf
-             print $ show $ netVertices gmf
-             print $ show $ overflowing gmf
+             {-print $ show $ netEdges gmf-}
+             {-print $ show $ netVertices gmf-}
+             let ovfs = overflowing gmf
+             let hovfs = hoverflowing gmf
+             let ovfs' = Set.unions (map snd (IM.toList ovfs))
+             let hovfs' = Set.unions (map snd (IM.toList hovfs))
+             print $ show $ hovfs' == ovfs'
+             print $ show $ ovfs
              print $ show $ steps gmf
              print $ (fromRational $ netFlow gmf :: Double)
-  {-putStrLn $ show $ netVertices out-}
   putStrLn "FGL flow"
-  putStrLn $ show expe
-  {-putStrLn $ show $ netNeighbors out 1 -}
-  {-putStrLn $ show $ netNeighbors out 2 -}
-  {-putStrLn $ show $ netNeighbors out 5 -}
-
+  {-putStrLn $ show expe-}
