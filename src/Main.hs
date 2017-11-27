@@ -46,12 +46,12 @@ tfg = Network { graph = graphTest1
 main :: IO ()
 main = do
   let name = "weights of RBBC"
-  let l    = 20
-  let d    = 3
+  let l    = 60
+  let d    = 2
   let latt = graphCubicPBC $ PBCSquareLattice l d
-  let rbbc = RandomBond { bondDisorder = Dichotomous 901 0.95
+  let rbbc = RandomBond { bondDisorder = Dichotomous 91 0.85
   {-let rbbc = RandomBond { bondDisorder = Unimodal 901 1.15-}
-                        , crystalField = 2.887
+                        , crystalField = 1.987
                         }
   let real = realization'RBBC rbbc latt
   let ou = maxFlow tfg
@@ -76,12 +76,11 @@ main = do
            Right gmf -> do
              {-print $ show $ netEdges gmf-}
              {-print $ show $ netVertices gmf-}
-             let ovfs = overflowing gmf
-             let hovfs = hoverflowing gmf
+             let ovfs = foverflowing gmf
+             {-let bvfs = boverflowing gmf-}
              let ovfs' = Set.unions (map snd (IM.toList ovfs))
-             let hovfs' = Set.unions (map snd (IM.toList hovfs))
-             print $ show $ hovfs' == ovfs'
-             print $ show $ ovfs
+             print $ show $ Set.size ovfs'
+             {-print $ show $ bvfs-}
              print $ show $ steps gmf
              print $ (fromRational $ netFlow gmf :: Double)
   putStrLn "FGL flow"
