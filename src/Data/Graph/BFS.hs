@@ -23,7 +23,7 @@ module Data.Graph.BFS
 import Data.List
 import Data.Maybe
 import qualified Data.Vector as V
-import qualified Data.IntMap.Strict as IM
+import qualified Data.IntMap as IM
 import qualified Data.IntSet as Set
 
 import Data.Graph

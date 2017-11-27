@@ -15,19 +15,10 @@ Portability : POSIX
 {-# OPTIONS_GHC -funbox-strict-fields #-}
 
 module Data.Graph.PushRelabel.STM
-  ( ResidualGraph (..)
-  , pushRelabel
-  , initializeResidualGraph
-  , ResidualVertex (..)
-  , ResidualEdge (..)
-  , Network (..)
-  , Capacity (..)
-  , Capacities (..)
-  , Flow 
-  , excess
-  , height
-  {-, inFlow-}
-  , netFlow
+  (
+    ResidualGraph (..)
+  {-, pushRelabel-}
+  {-, netFlow-}
   ) where
 
 import Data.List
@@ -41,54 +32,48 @@ import Control.Concurrent.STM
 import Control.Monad
 
 import Data.Graph
+import Data.Graph.Network
 import Data.Graph.BFS
 
-type Capacity = Rational 
-type Capacities = M.Map Edge Capacity 
-type Flow = Capacity
-type Height = Natural
-type Excess = Capacity
-data ResidualVertexP = ResidualVertexP Vertex Height Excess
-  deriving (Show,Eq)
+import Data.Graph.PushRelabel.Internal
 
-data ResidualVertex = ResidualVertex !Vertex !(TVar Height) !(TVar Excess)
+
+data ResidualVertexSTM = ResidualVertexSTM Vertex (Level,Level) (TVar Height) (TVar Excess)
   deriving (Eq)
 
-data ResidualEdgeP = ResidualEdgeP Edge Capacity Flow
-  deriving (Show,Eq)
+type ResidualVerticesSTM = IM.IntMap ResidualVertexSTM
 
-data ResidualEdge = ResidualEdge !Edge !Capacity !(TVar Flow)
+data ResidualEdgeSTM = ResidualEdgeSTM Edge Capacity (TVar Flow)
   deriving (Eq)
 
+type ResidualEdgesSTM = IM.IntMap ResidualEdgeSTM
 
-type ResidualVertices = IM.IntMap ResidualVertex
-type NeighborsMap = IM.IntMap ([Vertex],[Vertex])
-type ResidualEdges = IM.IntMap ResidualEdge
+type OverflowingSTM = IM.IntMap (TVar Set.IntSet)
 
-data Network = Network { graph :: Graph
-                       , source :: Vertex
-                       , sink :: Vertex
-                       , capacities :: Capacities
-                       , flow :: Capacities
-                       }
-                       deriving (Show,Eq)
+data ResidualGraphSTM = ResidualGraphSTM 
+  { network :: Network
+  , netVertices :: ResidualVerticesSTM
+  , netEdges :: ResidualEdgesSTM
+  , netNeighborsMap :: NeighborsMap 
+  , overflowing :: OverflowingSTM
+  , steps :: Int
+  }
+  deriving (Eq)
 
-data ResidualGraph = ResidualGraph { network :: Network
-                                   , netVertices :: ResidualVertices
-                                   , netEdges :: ResidualEdges 
-                                   , netNeighborsMap :: IM.IntMap ([Vertex], [Vertex])
-                                   , steps :: Int
-                                   }
-                       deriving (Eq)
-
+{-
 initializeResidualGraph :: Network -> IO ResidualGraph
 initializeResidualGraph net = do
   vs <- initializeVertices net
   es <- initializeEdges net
+  fovs <- getForwardOverflowing net
+  bovs <- getBackwardOverflowing net
+  let neimap = getNetNeighborsMap $ graph net 
   return ResidualGraph { network = net
                        , netVertices = vs
                        , netEdges = es
-                       , netNeighborsMap = getNetNeighborsMap $ graph net
+                       , netNeighborsMap = neimap
+                       , foverflowing = fovs
+                       , boverflowing = bovs
                        , steps = 0
                        }
 
@@ -100,15 +85,10 @@ reverseNetwork net = Network { graph = reverseGraph $ graph net
                              , flow = reverseFlows $ flow net
                              }
 
-reverseCapacities :: Capacities -> Capacities
-reverseCapacities cs = M.fromList $ map (\(e,c) -> (reverseEdge e,c)) (M.toList cs)
-
-reverseFlows :: Capacities -> Capacities
-reverseFlows fs = M.fromList $ map (\(e,f) -> (reverseEdge e,f)) (M.toList fs)
-
-getNetNeighborsMap :: Graph -> IM.IntMap ([Vertex],[Vertex])
+getNetNeighborsMap :: Graph -> NeighborsMap
 getNetNeighborsMap g =
-  let neis v = (neighbors g v, fromJust (IM.lookup v (getReverseNeighbors (vertices g) (edges g))))
+  let revneis = getReverseNeighbors (vertices g) (edges g)
+      neis v = (neighbors g v, fromJust (IM.lookup v revneis))
    in foldl (\ac v -> IM.insert v (neis v) ac) IM.empty (vertices g)
 
 netNeighbors :: NeighborsMap -> Vertex -> ([Vertex],[Vertex]) -- ^ graph and reverse (inward and outward) neighbors
@@ -122,27 +102,30 @@ sourceEdges net =
       cap v = fromJust $ M.lookup (Edge s v) cs
     in map (\v -> ((Edge s v), cap v )) (neighbors g s) 
 
-reverseSinkEdges :: Network -> [(Edge,Capacity)]
-reverseSinkEdges net = 
-  let g = graph net
-      cs = capacities net
-      t = sink net
-      cap v = fromJust $ M.lookup (Edge v t) cs
-   in map (\v -> ((Edge t v), cap v )) (neighbors (reverseGraph g) t) 
-
-
 initializeVertices :: Network -> IO ResidualVertices
 initializeVertices net = do
   let g = graph net
-  let cs = capacities net
-  let s = source net
-  let t = sink net
-  let sh = fromIntegral $ numVertices g
-  let ses = sourceEdges net
-  let zvs = IM.fromList $ zip (vertices g) (map (\v -> ResidualVertexP v 1 0) $ vertices g)
-  let (sx, nvs) = foldl' (\(cx,ac) (e,c) -> let v = to e
-                                              in (cx-c, IM.insert v (ResidualVertexP v 2 c) ac)) (0, zvs) ses
-  let fvs = IM.insert s (ResidualVertexP s sh sx) nvs
+      cs = capacities net
+      s = source net
+      t = sink net
+      sh = fromIntegral $ numVertices g
+      ses = sourceEdges net
+      vs = vertices $ graph net
+      es = edges $ graph net
+      flevels = BFS.level $ BFS.bfs (graph net) (source net)
+      blevels = BFS.level $ BFS.bfs (reverseGraph $ graph net) (sink net)
+      fl v = fromJust $ IM.lookup v flevels
+      bl v = fromJust $ IM.lookup v blevels
+      zvs = IM.fromList $ 
+              zip (vertices g) (map (\v -> 
+                if v == t 
+                   then ResidualVertexP t (fl v, bl v) 0 0 
+                   else ResidualVertex v (fl v, bl v) 0 0) $ vertices g)
+      (sx, nvs) = foldl' (\(cx,ac) (e,c) -> 
+                    let v = to e
+                     in (cx-c, IM.adjust (const (ResidualVertex v (fl v, bl v) 0 c)) v ac)
+                         ) (0, zvs) ses
+      fvs = IM.insert s (ResidualVertex s (0,sh) sh sx) nvs
   traverse (\(ResidualVertexP v h x) -> do 
                                       th <- newTVarIO h
                                       tx <- newTVarIO x
@@ -171,7 +154,7 @@ overflowing rg = atomically $ do
   xvs <- mapM (\v -> fmap ((,) v) (excess rg v)) vs
   return $ map fst $ filter (\(v,x) -> x/=0 && v /= s && v /= t) xvs
 
-pushRelabel :: Network -> IO Flow
+pushRelabel :: Network -> IO (Either String ResidualGraph)
 pushRelabel net = do
   initg <- initializeResidualGraph net
   ovfs <- fmap Set.fromList $ overflowing initg
@@ -210,7 +193,7 @@ pushRelabel net = do
   revflow <- netFlow revg 
   print "reverse flow"
   print (fromRational $ revflow :: Double)
-  netFlow initg
+  return $ Right initg
   where 
       g = graph net
       cs = capacities net
@@ -498,3 +481,4 @@ outflow g v = do
   let ns  = netNeighbors (netNeighborsMap g) v 
   let feds = map (\n -> fromTuple (v,n)) $ fst ns
   foldM (\ac e -> ((+) ac) <$> edgeFlow g e) 0 feds 
+  -}
