@@ -22,12 +22,31 @@ import Data.Graph.BFS
 import Data.BlumeCapel
 import Data.BlumeCapel.GSNetwork
 
+import Data.PRNG
+import Data.PRNG.MTRNG
+import Data.Graph
+
 fastTests :: [Test]
 fastTests = [ test1
+            , test2
             {-, test3-}
             {-, test4-}
             {-, test5-}
             ]
+
+
+getGS :: L -> D -> Int -> GroundState
+getGS l d s =
+  let latt = graphCubicPBC $ PBCSquareLattice l d
+      rbbc = RandomBond { bondDisorder = Dichotomous s 0.95
+  {-let rbbc = RandomBond { bondDisorder = Unimodal 901 1.15-}
+                        , crystalField = 1.987
+                        }
+      real = realization'RBBC rbbc latt
+   in groundState real
+
+testGS :: GroundState -> Bool
+testGS gs = cutEnergy gs == (energy $ replica gs)
 
 test1 :: Test
 test1 = do
@@ -44,6 +63,17 @@ test1 = do
   case  out == expe of
     True -> testPassed name "passed!"
     False -> testFailed name $ (,) (show expe) (show out)
+
+test2 :: Test
+test2 = do
+  let name = "Cut Energy equals realizations Hamiltonian"
+      rng = getRNG 23 :: MTRNG
+      seeds = map (floor . ((*) 10000)) $ uniformSample rng 100
+      gss = map (getGS 30 2) seeds
+      out = filter (not . testGS) gss
+  case null out of
+    True -> testPassed name "passed!"
+    False -> testFailed name $ (,) ("error:") (show out)
 
 {-test3 :: Test-}
 {-test3 = do-}

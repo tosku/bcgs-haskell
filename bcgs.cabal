@@ -16,11 +16,14 @@ extra-source-files:  README.md
 library
   hs-source-dirs:      src
   exposed-modules:     Data.Graph
-                     , Data.Graph.BFS
-                     , Test.Graph.BFS
-                     , Data.Graph.PushRelabel.STM
                      , Data.Graph.Grid
                      , Test.Graph.Grid
+                     , Data.Graph.Network
+                     , Data.Graph.BFS
+                     , Test.Graph.BFS
+                     , Data.Graph.PushRelabel.Internal
+                     , Data.Graph.PushRelabel.Pure
+                     , Data.Graph.PushRelabel.STM
                      , Data.BlumeCapel
                      , Test.BlumeCapel
                      , Data.BlumeCapel.GSNetwork
@@ -54,6 +57,9 @@ executable bcgs-exe
   other-modules:       Data.Graph
                      , Data.Graph.BFS
                      , Test.Graph.BFS
+                     , Data.Graph.Network
+                     , Data.Graph.PushRelabel.Internal
+                     , Data.Graph.PushRelabel.Pure
                      , Data.Graph.PushRelabel.STM
                      , Data.Graph.Grid
                      , Test.Graph.Grid

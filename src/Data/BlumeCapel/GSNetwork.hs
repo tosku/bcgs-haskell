@@ -18,23 +18,24 @@ module Data.BlumeCapel.GSNetwork
   ( weights
   , gsBCCapacities
   , network'RBBC
-  , GSNetwork (..)
+  , groundState
+  , Network (..)
+  , GroundState (..)
   ) where
 
 import Data.List
 import Data.Maybe
+import Data.Either.Unwrap
 import qualified Data.Map.Lazy as M
 import qualified Data.Vector as V
 import qualified Data.IntMap.Lazy as IM
 
 import Data.Graph
 import Data.Graph.Network
+import Data.Graph.PushRelabel.Pure
 import Data.BlumeCapel
 
--- | Ground state flow graph from rbbc realization
-type GSNetwork = Network 
-
-network'RBBC :: RBBC -> GSNetwork 
+network'RBBC :: RBBC -> Network 
 network'RBBC r = Network { graph = let g = lattice r 
                                     in Graph { vertices = [0 .. (fromIntegral (size r) + 1)]
                                              , edges = networkEdges r
@@ -125,7 +126,30 @@ sourceTargetEdges r =
    in (sourceEdges,targetEdges)
 
 networkEdges :: RBBC -> [Edge]
-networkEdges r = {-# SCC networkEDGEs #-} map fst (netEdgeCaps r)
+networkEdges r = map fst (netEdgeCaps r)
 
 gsBCCapacities :: RBBC -> Capacities
 gsBCCapacities r = M.fromList (netEdgeCaps r)
+
+gsConfiguration :: ResidualGraph -> BCConfiguration
+gsConfiguration rg = 
+  let (svs,tvs) = stCut rg
+   in SpinConfiguration $ IM.fromList 
+   $ map (\v -> (v,Up)) svs ++ map (\v -> (v,Zero)) tvs
+
+data GroundState = GroundState { replica :: RBBCReplica
+                               , cutEnergy :: Energy
+                               }
+                               deriving (Eq,Show)
+
+groundState :: RBBC -> GroundState
+groundState real = 
+  let net = network'RBBC real
+      scaps = sourceEdgesCapacity net
+      rg = fromRight $ pushRelabel net
+      cen = netFlow rg - scaps
+      conf = gsConfiguration rg
+   in GroundState { replica = replica'RBBC real conf
+                  , cutEnergy = cen
+                  }
+

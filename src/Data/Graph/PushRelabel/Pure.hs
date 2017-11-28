@@ -16,9 +16,11 @@ Portability : POSIX
 
 module Data.Graph.PushRelabel.Pure
   ( ResidualGraph (..)
+  , Network (..)
   , pushRelabel
   , netFlow
-  , Network (..)
+  , sourceEdgesCapacity
+  , stCut
   ) where
 
 import Data.List
@@ -40,37 +42,37 @@ import Data.Graph.Network
 import Data.Graph.PushRelabel.Internal
 import qualified Data.Graph.BFS as BFS
 
-pushRelabel :: Network -> IO (Either String ResidualGraph)
-pushRelabel net = do
+pushRelabel :: Network -> Either String ResidualGraph
+pushRelabel net =
   let initg = initializeResidualGraph net
   {-let res = initg-}
-  let res = argalios initg 0
-  let nvs = vertices $ graph $ network res
-  let s = source net
-  let t = sink net
-  let insouts = filter (\v -> v /= s && v /= t && inflow res v < outflow res v) nvs
-  let xsflows = filter (\v -> v /= s && v /= t && inflow res v - outflow res v /= excess res v) nvs
-  let ofvs = IM.foldl (\ac ovs -> Set.union ac ovs) Set.empty $ overflowing res
-  let notofvs = filter (\ ov -> 
+      res = argalios initg 0
+      nvs = vertices $ graph $ network res
+      s = source net
+      t = sink net
+      insouts = filter (\v -> v /= s && v /= t && inflow res v < outflow res v) nvs
+      xsflows = filter (\v -> v /= s && v /= t && inflow res v - outflow res v /= excess res v) nvs
+      ofvs = IM.foldl (\ac ovs -> Set.union ac ovs) Set.empty $ overflowing res
+      notofvs = filter (\ ov -> 
                           let (ResidualVertex v l h x) = fromJust (IM.lookup ov (netVertices res)) 
                               ml = (IM.lookup l (overflowing res)) 
                            in case ml of
                                 Nothing -> True
                                 Just os -> not $ Set.member ov os
                        ) $ Set.toList $ getOverflowing $ netVertices res
-  let errovfs = Set.filter (\v -> excess res v == 0) ofvs
-  if null insouts && null xsflows && Set.null errovfs && null notofvs
-      then return $ Right res
+      errovfs = Set.filter (\v -> excess res v == 0) ofvs
+   in if null insouts && null xsflows && Set.null errovfs && null notofvs
+      then Right res
       else 
         if not $ null insouts 
-              then return $ Left $ "Error Inflow < Outflow " ++ show insouts
+              then Left $ "Error Inflow < Outflow " ++ show insouts
               else
                 if not $ null xsflows 
-                  then return $ Left $ "Error vertex excess " ++ show xsflows
+                  then Left $ "Error vertex excess " ++ show xsflows
                   else
                     if not $ Set.null errovfs 
-                      then return $ Left $ "Error not really overflowing " ++ show errovfs
-                      else return $ Left $ "Error not in overflowing " ++ show notofvs
+                      then Left $ "Error not really overflowing " ++ show errovfs
+                      else Left $ "Error not in overflowing " ++ show notofvs
                         ++ " overflowings are " ++ show (overflowing res)
                         ++ " nevertices are " ++ show (netVertices res)
 
@@ -140,7 +142,7 @@ pullNeighbors g v =
 bfsRelabel :: ResidualGraph -> ResidualGraph
 bfsRelabel rg =
   let sh = numVertices g
-      (tlvs,slvs) = residualDistances
+      (slvs,tlvs) = residualDistances rg
       rg' = foldl' (\ ac (v,l) -> 
              let h = sh + l
               in updateHeight ac v h
@@ -150,47 +152,5 @@ bfsRelabel rg =
   in rg''
   where
     g = graph $ network rg
-    s = source $ network rg
-    t = sink $ network rg
-  -- | (distance from sink , distance from source (only those that don't connect
-  -- to sink))
-    residualDistances = 
-      let es = map snd (IM.toList $ netEdges rg)
-          tres = filter (\(ResidualEdge e c f) -> f < c) es
-          tbes = filter (\(ResidualEdge e c f) -> f > 0) es
-          tfsatnbs = foldl' (\ac (ResidualEdge e c f) -> 
-            let u = from e
-                v = to e 
-                mns = IM.lookup v ac 
-             in case mns of 
-                   Nothing -> IM.insert v [u] ac
-                   Just ns -> IM.insert v (u:ns) ac
-                 ) IM.empty tres
-          tsatnbs = foldl' (\ac (ResidualEdge e c f) -> 
-            let u = from e
-                v = to e 
-                mns = IM.lookup u ac 
-             in case mns of 
-                   Nothing -> IM.insert u [v] ac
-                   Just ns -> IM.insert u (v:ns) ac
-                 ) tfsatnbs tbes
-          sfsatnbs = foldl' (\ac (ResidualEdge e c f) -> 
-            let u = from e
-                v = to e 
-                mns = IM.lookup v ac 
-             in case mns of 
-                   Nothing -> IM.insert u [v] ac
-                   Just ns -> IM.insert u (v:ns) ac
-                 ) IM.empty tres
-          ssatnbs = foldl' (\ac (ResidualEdge e c f) -> 
-            let u = from e
-                v = to e 
-                mns = IM.lookup v ac 
-             in case mns of 
-                   Nothing -> IM.insert v [u] ac
-                   Just ns -> IM.insert v (u:ns) ac
-                 ) sfsatnbs tbes
-          tlvs = BFS.level $ BFS.adjBFS tsatnbs t
-          slvs = BFS.level $ BFS.adjBFS ssatnbs s
-        in (tlvs,slvs)
+
 

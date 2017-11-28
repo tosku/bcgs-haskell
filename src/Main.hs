@@ -1,7 +1,10 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Main where
 
 import Data.List
 import Data.Maybe
+import Data.Either.Unwrap
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.IntSet as Set
@@ -18,6 +21,8 @@ import Data.BlumeCapel
 import Data.BlumeCapel.GSNetwork
 import Data.Graph.PushRelabel.Pure
 {-import qualified Data.Graph.PushRelabel.STM as IOPR-}
+
+default (Int,Rational,Double)
 
 
 graphTest1 = Graph { vertices = [1..7]
@@ -43,46 +48,60 @@ tfg = Network { graph = graphTest1
              , flow = M.empty
              }
 
-
-main :: IO ()
-main = do
-  let name = "weights of RBBC"
-  let l    = 60
-  let d    = 2
+getGS :: L -> D -> GroundState
+getGS l d =
   let latt = graphCubicPBC $ PBCSquareLattice l d
-  let rbbc = RandomBond { bondDisorder = Dichotomous 91 0.95
+      rbbc = RandomBond { bondDisorder = Dichotomous 91 0.95
   {-let rbbc = RandomBond { bondDisorder = Unimodal 901 1.15-}
                         , crystalField = 1.987
                         }
-  let real = realization'RBBC rbbc latt
+      real = realization'RBBC rbbc latt
+   in groundState real
+
+testGS :: GroundState -> Bool
+testGS gs = cutEnergy gs == (energy $ replica gs)
+
+
+main :: IO ()
+main = do
   {-let ou = maxFlow tfg-}
-  let fg = network'RBBC real
-  let vs = map (\v -> (v,())) $ vertices (graph fg) :: [G.UNode]
-  let es = map (\(e, c) -> (from e,to e,fromRational c)) $ (M.toList $ capacities fg) :: [G.LEdge Double]
-  let mfg = G.mkGraph vs es :: I.Gr () Double
-  let expe = MF.maxFlow mfg 0 (sink fg) :: Double
   putStrLn "Started 🏃 \n"
 
+  let gs = getGS 30 2
+  putStrLn "Ground state:"
+  putStrLn "energy:"
+  putStrLn $ showEnergy $ cutEnergy gs
+  putStrLn "test passed:"
+  putStrLn $ show $ testGS gs
+
+  {-let fg = network'RBBC real-}
+  {-let vs = map (\v -> (v,())) $ vertices (graph fg) :: [G.UNode]-}
+  {-let es = map (\(e, c) -> (from e,to e,fromRational c)) $ (M.toList $ capacities fg) :: [G.LEdge Double]-}
+  {-let mfg = G.mkGraph vs es :: I.Gr () Double-}
+  {-let expe = MF.maxFlow mfg 0 (sink fg) :: Double-}
   {-putStrLn "FGL flow"-}
   {-putStrLn $ show expe-}
   {-putStrLn "\n"-}
 
-  putStrLn "Pure pushRelabel"
-  eout <- pushRelabel fg
-  out <- case eout of 
-           Left err -> print err 
-           Right gmf -> do
-             {-print $ show $ netEdges gmf-}
-             {-print $ show $ netVertices gmf-}
-             let ovfs = overflowing gmf
-             let ovfs' = Set.unions (map snd (IM.toList ovfs))
-             putStrLn "number of forward overflowing"
-             print $ show $ Set.size ovfs'
-             putStrLn "steps"
-             print $ show $ steps gmf
-             putStrLn "max flow"
-             print (fromRational $ netFlow gmf :: Double)
-
+  {-putStrLn "Pure pushRelabel"-}
+  {-let eout = pushRelabel fg-}
+  {-let mfvalue = (fromRational $ netFlow (fromRight eout) :: Double)-}
+  {-let sourceCap = (fromRational $ sourceEdgesCapacity fg :: Double)-}
+  {-out <- case eout of -}
+           {-Left err -> print err -}
+           {-Right gmf -> do-}
+             {-{-print $ show $ netEdges gmf-}-}
+             {-{-print $ show $ netVertices gmf-}-}
+             {-let ovfs = overflowing gmf-}
+             {-let ovfs' = Set.unions (map snd (IM.toList ovfs))-}
+             {-putStrLn "number of forward overflowing"-}
+             {-print $ show $ Set.size ovfs'-}
+             {-putStrLn "steps"-}
+             {-print $ show $ steps gmf-}
+             {-putStrLn "max flow"-}
+             {-print mfvalue-}
+             {-putStrLn "Cut Energy"-}
+             {-print $ show (mfvalue - sourceCap)-}
 
   {-putStrLn "\n"-}
   {-putStrLn "STM pushRelabel flow"-}

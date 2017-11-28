@@ -40,6 +40,9 @@ module Data.Graph.PushRelabel.Internal
   , updateHeight
   , updateExcess
   , updateEdge
+  , sourceEdgesCapacity
+  , residualDistances
+  , stCut
   ) where
 
 import Data.List
@@ -137,6 +140,11 @@ sourceEdges net =
       s = source net
       cap v = fromJust $ M.lookup (Edge s v) cs
     in map (\v -> ((Edge s v), cap v )) (neighbors g s) 
+
+sourceEdgesCapacity :: Network -> Capacity
+sourceEdgesCapacity net = 
+  let ses = sourceEdges net
+   in sum $ map snd ses
 
 initializeVertices :: Network -> ResidualVertices
 initializeVertices net =
@@ -317,3 +325,59 @@ outflow g v =
   let ns  = netNeighbors (netNeighborsMap g) v 
       reds = map (\n -> fromTuple (v,n)) $ fst ns
    in foldl' (\ac e -> (ac + edgeFlow g e)) 0 reds 
+
+  -- | (distance from sink , distance from source (only those that don't connect
+  -- to sink))
+residualDistances :: ResidualGraph -> (IM.IntMap Int, IM.IntMap Int)
+residualDistances rg = 
+  let es = map snd (IM.toList $ netEdges rg)
+      tres = filter (\(ResidualEdge e c f) -> f < c) es
+      tbes = filter (\(ResidualEdge e c f) -> f > 0) es
+      tfsatnbs = foldl' (\ac (ResidualEdge e c f) -> 
+        let u = from e
+            v = to e 
+            mns = IM.lookup v ac 
+         in case mns of 
+               Nothing -> IM.insert v [u] ac
+               Just ns -> IM.insert v (u:ns) ac
+             ) IM.empty tres
+      tsatnbs = foldl' (\ac (ResidualEdge e c f) -> 
+        let u = from e
+            v = to e 
+            mns = IM.lookup u ac 
+         in case mns of 
+               Nothing -> IM.insert u [v] ac
+               Just ns -> IM.insert u (v:ns) ac
+             ) tfsatnbs tbes
+      sfsatnbs = foldl' (\ac (ResidualEdge e c f) -> 
+        let u = from e
+            v = to e 
+            mns = IM.lookup v ac 
+         in case mns of 
+               Nothing -> IM.insert u [v] ac
+               Just ns -> IM.insert u (v:ns) ac
+             ) IM.empty tres
+      ssatnbs = foldl' (\ac (ResidualEdge e c f) -> 
+        let u = from e
+            v = to e 
+            mns = IM.lookup v ac 
+         in case mns of 
+               Nothing -> IM.insert v [u] ac
+               Just ns -> IM.insert v (u:ns) ac
+             ) sfsatnbs tbes
+      tlvs = BFS.level $ BFS.adjBFS tsatnbs t
+      slvs = BFS.level $ BFS.adjBFS ssatnbs s
+    in (slvs,tlvs)
+  where
+    g = graph $ network rg
+    s = source $ network rg
+    t = sink $ network rg
+
+-- | gives st partition 
+stCut :: ResidualGraph -> ([Vertex],[Vertex])
+stCut rg = 
+  let ts = Set.fromList $ map fst (IM.toList (snd $ residualDistances rg))
+      g = graph $ network rg
+      vs = Set.fromList $ vertices g
+      ss = Set.difference vs ts
+   in (Set.toList ss, Set.toList ts)

@@ -20,11 +20,14 @@ Portability : POSIX
 
 module Data.BlumeCapel
     ( Graph (..)
+    , Energy
+    , showEnergy
     , BondDisorder (..)
     , Delta -- ^ Crysta field strength Double
     , SpinOne (..)
     , Spin (..)
     , RBBC (..) -- ^ Random Bond Blume Capel
+    , RBBCReplica (..) -- ^ Random Bond Blume Capel
     , RandomBond (..)
     , Realization (..)
     , Replica (..)
@@ -33,6 +36,7 @@ module Data.BlumeCapel
     , size
     , realization'RBBC
     , replica'RBBC
+    , getMagnetization
     ) where
 
 import Data.List
@@ -47,6 +51,9 @@ import Data.PRNG.MTRNG
 import Data.Graph
 
 type Energy = Rational
+showEnergy :: Energy -> String
+showEnergy e = show (fromRational e :: Double)
+
 type Magnetization = Rational
 
 class Eq s => Spin s where
@@ -126,6 +133,9 @@ data Spin s => Realization r s = Realization { lattice :: Graph
                                              , interactions :: Js
                                              , fieldCoupling :: s -> Energy
                                              }
+instance Spin s => Show (Realization r s) where
+  show r = "lattice: " ++ show (lattice r)
+    ++ " interactions: " ++ show (interactions r)
 instance Spin s => Eq (Realization r s) where
   (==) r1 r2 = let allUp = SpinConfiguration $ IM.fromList (zip [1..(numVertices (lattice r1))] (repeat referenceSpin))
                 in interactions r1 == interactions r2 &&
@@ -138,6 +148,10 @@ data Spin s => Replica r s = Replica { realization :: Realization r s
                                      , configuration :: SpinConfiguration s
                                      , energy :: Energy
                                      }
+instance (Spin s) => Show (Replica r s) where
+  show repl = "replica vertices:" ++ show (numVertices $ lattice $ realization repl)
+    ++ "\n magnetization: " ++ show ((fromRational $ getMagnetization $ configuration repl) / (fromIntegral $ numVertices $ lattice $ realization repl) :: Double)
+    ++ "\n energy: " ++ show (fromRational (energy repl)::Double)
 instance (Spin s) => Eq (Replica r s) where
   (==) r1 r2 = realization r1 == realization r2 
     && configuration r1 == configuration r2
@@ -150,6 +164,8 @@ data RandomBond = RandomBond { bondDisorder :: BondDisorder
 
 type RBBC = Realization RandomBond SpinOne
 
+type RBBCReplica = Replica RandomBond SpinOne
+
 size :: Spin s => Realization r s -> Int
 size r = numVertices $ lattice r
 
@@ -159,16 +175,18 @@ realization'RBBC r g = Realization { lattice = g
                                    , fieldCoupling = (\s -> (project s s) * (crystalField r))
                                    }
 
-replica'RBBC :: Realization RandomBond SpinOne -> (Realization RandomBond SpinOne -> BCConfiguration) -> Replica RandomBond SpinOne
-replica'RBBC r rtoc = Replica { configuration = (rtoc r)
-                              , energy = let c = (rtoc r)
-                                             bondenergy = foldl' (\ac e -> 
+replica'RBBC :: Realization RandomBond SpinOne 
+             -> BCConfiguration 
+             -> RBBCReplica
+replica'RBBC r conf = Replica { realization = r
+                              , configuration = conf
+                              , energy = let bondenergy = foldl' (\ac e -> 
                                                let (f,t) = toTuple e 
                                                    projc conf =  project <$> (spin conf f) <*> (spin conf t)
-                                                   be = (fromJust $ projc c) * (fromJust $ M.lookup e (interactions r))
+                                                   be = (fromJust $ projc conf) * (fromJust $ M.lookup e (interactions r))
                                                 in ac - be
                                                ) 0 (edges (lattice r)) 
-                                             siteenergy = sum $ getFieldCoupling r c
+                                             siteenergy = sum $ getFieldCoupling r conf
                                          in bondenergy + siteenergy
                                }
 
