@@ -1,0 +1,17 @@
+{ "_l" : 30
+, "_d"   : 2
+, "_delta": 
+  { "rangefrom": 0
+  , "rangeto": 2
+  , "rangestep": 0.1
+  }
+, "_disorder": 
+  { "rangefrom": 1
+  , "rangeto": 1
+  , "rangestep": 0.1
+  }
+, "_disorderType" : "dichotomous"
+, "_realizations" : 10
+, "_seedofSeeds" : 1409
+, "_resultfile"    : "l20.json"
+}

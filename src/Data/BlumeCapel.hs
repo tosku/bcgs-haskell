@@ -23,6 +23,7 @@ module Data.BlumeCapel
     , Energy
     , showEnergy
     , BondDisorder (..)
+    , DisorderStrength
     , Delta -- ^ Crysta field strength Double
     , SpinOne (..)
     , Spin (..)
@@ -87,7 +88,7 @@ type BCConfiguration = SpinConfiguration SpinOne
 
 type Delta = Rational
 
-type DisorderStrength = Double -- ^ Should be between [0,1]
+type DisorderStrength = Rational -- ^ Should be between [0,1]
 type J = Energy -- ^ Exchange interaction strength
 type Js = M.Map Edge J
 data (Spin s) => Field s = Field (IM.IntMap Energy)
@@ -116,14 +117,14 @@ dichotomousJs es s r = do
       strongjs = IM.fromList $ zip [1..n] (repeat jStrong)
       weakindxs = sample (getRNG s :: MTRNG) (quot n 2) [1..n]
       js = foldl (\ac i -> IM.insert i jWeak ac) strongjs weakindxs
-   in M.fromList $ zip es (map (toRational . snd) $ IM.toList js)
+   in M.fromList $ zip es (map snd $ IM.toList js)
 
 unimodalJs :: [Edge] -> Seed -> DisorderStrength -> Js
 unimodalJs es s r = 
   let n = length es
       rng = getRNG s :: MTRNG
       μ = 1
-      σ = r
+      σ = fromRational r
       f = 0
       t = 2
       js = IM.fromList $ zip [1..] (map toRational (truncatedNormalSample rng μ σ f t n))

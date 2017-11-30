@@ -376,8 +376,10 @@ residualDistances rg =
 -- | gives st partition 
 stCut :: ResidualGraph -> ([Vertex],[Vertex])
 stCut rg = 
-  let ts = Set.fromList $ map fst (IM.toList (snd $ residualDistances rg))
+  let ts = Set.delete s $ Set.delete t $ Set.fromList $ map fst (IM.toList (snd $ residualDistances rg))
       g = graph $ network rg
-      vs = Set.fromList $ vertices g
+      s = source $ network rg
+      t = sink $ network rg
+      vs = Set.delete s $ Set.delete t $ Set.fromList $ vertices g
       ss = Set.difference vs ts
    in (Set.toList ss, Set.toList ts)
