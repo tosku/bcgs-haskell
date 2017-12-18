@@ -1,3 +1,13 @@
+{-|
+Module      : Test.BlumeCapel.GSNetwork
+Description : Tests for GSNetork
+Copyright   : Thodoris Papakonstantinou, 2016
+License     : GPL-3
+Maintainer  : mail@tpapak.com
+Stability   : experimental
+Portability : POSIX
+
+ -}
 {-# LANGUAGE TemplateHaskell #-}
 module Test.BlumeCapel.GSNetwork where
 
@@ -29,9 +39,6 @@ import Data.Graph
 fastTests :: [Test]
 fastTests = [ test1
             , test2
-            {-, test3-}
-            {-, test4-}
-            {-, test5-}
             ]
 
 
@@ -64,12 +71,16 @@ test1 = do
     True -> testPassed name "passed!"
     False -> testFailed name $ (,) (show expe) (show out)
 
+-- | Test of tests! Guarantees max flow algorithm and graph reduction.
+-- The energy as calculated by the cut of the reduced graph and compares it
+-- whith that of the coresponding ground state spin configuration coupled with
+-- the realization
 test2 :: Test
 test2 = do
-  let name = "Cut Energy equals realizations Hamiltonian 100 realizations  L30 d2"
+  let name = "Cut Energy equals realizations Hamiltonian 100 realizations L20 d2"
       rng = getRNG 23 :: MTRNG
       seeds = map (floor . ((*) 10000)) $ uniformSample rng 100
-      gss = map (getGS 30 2) seeds
+      gss = map (getGS 20 2) seeds
       out = filter (not . testGS) gss
   case null out of
     True -> testPassed name "passed!"
