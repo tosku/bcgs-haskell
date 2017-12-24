@@ -24,9 +24,13 @@ import qualified Data.IntSet as Set
 import qualified Data.IntMap.Strict as IM
 
 import           Data.Aeson
+import           Data.Aeson.Encode.Pretty
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Text.Lazy (Text)
 import Data.Text.Lazy.IO as I (appendFile,writeFile)
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Text as TXT
+import Data.Text.Encoding
 import           System.Environment
 import qualified Data.ByteString.Lazy  as B
 import qualified Data.ByteString.Char8 as C
@@ -60,6 +64,7 @@ data ParamRange = ParamRange
   , rangestep :: Double
   } deriving (Show, Generic)
 instance FromJSON ParamRange
+instance ToJSON ParamRange
 data JobArguments = JobArguments
   { _l :: Int
   , _d :: Int
@@ -71,12 +76,21 @@ data JobArguments = JobArguments
   , _resultfile    :: String
   } deriving (Show, Generic)
 instance FromJSON JobArguments
+instance ToJSON JobArguments
 
 data Observables = Observables
   { energy :: Double
   , magnetization :: Double
+  , configuration :: BC.BCConfiguration
   } deriving (Show, Generic)
-instance ToJSON Observables
+instance ToJSON Observables where
+  toJSON obs = 
+    let encodeConf (BC.SpinConfiguration conf) = 
+          map (\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $
+            IM.toList conf
+    in object ["energy" .= energy obs
+                      , "mag" .= magnetization obs 
+                      , "configuration" .= encodeConf (configuration obs)]
 
 data GSRecord = GSRecord
   { linear_size :: Int
@@ -113,8 +127,9 @@ getGS params =
 saveGS :: GSParams -> GroundState -> GSRecord
 saveGS !args !gs =
   let nvs = fromIntegral $ (numVertices $ BC.lattice $ BC.realization $ replica gs)
-      en = (fromRational $ BC.energy $ replica gs) / nvs :: Double
+      en = fromRational $ BC.energy $ replica gs
       mag = (fromRational $ BC.getMagnetization $ BC.configuration $ replica gs) / nvs :: Double
+      conf = BC.configuration $ replica gs
       gsrec = GSRecord
                 { linear_size = fromIntegral $ l args
                 , dimensions = fromIntegral $ d args
@@ -125,6 +140,7 @@ saveGS !args !gs =
                 , observables = Observables 
                   { energy = en
                   , magnetization = mag
+                  , configuration = conf
                   }
                 }
    in gsrec
@@ -138,7 +154,7 @@ getRange params =
       in [frm,nxt..rend]
 
 argumentsToParameters :: JobArguments 
-                      -> [GSParams]
+                      -> Either String [GSParams]
 argumentsToParameters args = 
      let size = (fromIntegral $ _l args) :: Lat.L
          dimensions = fromIntegral $ _d args
@@ -146,17 +162,22 @@ argumentsToParameters args =
          rs = getRange $ _disorder args
          deltas = getRange $ _delta args
          seeds = randomInts (getRNG $ _seedofSeeds args :: MTRNG) (_realizations args)
-      in map (\(s, (r,d)) -> 
-        GSParams { l = size
-                 , d = dimensions
-                 , r = r
-                 , disorderType = distype
-                 , delta = d
-                 , seed = s
-                 }) $ (,) <$> seeds <*> ((,) <$> rs <*> deltas)
+      in if not $ elem distype ["unimodal", "dichotomous"]
+            then Left "Available bond disorder unimodal, dichotomous"
+            else Right $ map (\(s, (r,d)) -> 
+              GSParams { l = size
+                       , d = dimensions
+                       , r = r
+                       , disorderType = distype
+                       , delta = d
+                       , seed = s
+                       }) $ (,) <$> seeds <*> ((,) <$> rs <*> deltas)
          
-runJob :: JobArguments -> [GSRecord]
-runJob args = do
-  let pars = argumentsToParameters args
-      gss = parMap rpar (\par -> (par,getGS par)) pars
-   in parMap rpar (\(par,gs) -> saveGS par gs) gss
+runJob :: [GSParams] -> [(GSParams,GroundState)]
+runJob pars = zip pars $ map getGS pars
+
+gsToJSON :: [(GSParams,GroundState)] -> [GSRecord]
+gsToJSON gss = map (\(par,gs) -> saveGS par gs) gss
+
+getJson :: ToJSON a => a -> String
+getJson d = TXT.unpack $ decodeUtf8 $ BSL.toStrict (encodePretty d)

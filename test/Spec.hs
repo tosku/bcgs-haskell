@@ -1,16 +1,16 @@
-import Test.Test
+import qualified Test.BCTest as T
 import Test.Graph.Grid as G
 import Test.Graph.BFS as BFS
 import Test.BlumeCapel as B
 import Test.BlumeCapel.GSNetwork as GSN
-import Test.BlumeCapel.GSRecord as Rec
+import Test.BlumeCapel.GSIO as GSIO
 
 main :: IO ()
 main = do
   putStrLn "\n"
   putStrLn $ "Test Begins"
-  reportTests $ G.fastTests 
+  T.reportTests $ G.fastTests 
     ++ BFS.fastTests 
     ++ B.fastTests 
     ++ GSN.fastTests  
-    ++ Rec.fastTests
+    ++ GSIO.fastTests

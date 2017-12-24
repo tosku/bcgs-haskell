@@ -16,6 +16,7 @@ Portability : POSIX
  {-# LANGUAGE FunctionalDependencies #-}
  {-# LANGUAGE FlexibleInstances #-}
  {-# LANGUAGE Rank2Types #-}
+ {-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
 
 
 module Data.BlumeCapel
@@ -39,6 +40,8 @@ module Data.BlumeCapel
     , replica'RBBC
     , getMagnetization
     ) where
+
+import           GHC.Generics
 
 import Data.List
 import Data.Maybe
@@ -96,7 +99,7 @@ data (Spin s) => Field s = Field (IM.IntMap Energy)
 
 data BondDisorder = Dichotomous Seed DisorderStrength |
   Unimodal Seed DisorderStrength
-  deriving (Show,Eq)
+  deriving (Show,Eq,Generic)
 
 getInteractions :: BondDisorder -> [Edge] -> Js
 getInteractions bc es =

@@ -12,6 +12,7 @@ Portability : POSIX
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
 
 
 module Data.BlumeCapel.GSNetwork
@@ -22,6 +23,8 @@ module Data.BlumeCapel.GSNetwork
   , Network (..)
   , GroundState (..)
   ) where
+
+import qualified GHC.Generics as Gen
 
 import Data.List
 import Data.Maybe
@@ -140,7 +143,7 @@ gsConfiguration rg =
 data GroundState = GroundState { replica :: RBBCReplica
                                , cutEnergy :: Energy
                                }
-                               deriving (Eq,Show)
+                               deriving (Eq,Show,Gen.Generic)
 
 groundState :: RBBC -> GroundState
 groundState real = 

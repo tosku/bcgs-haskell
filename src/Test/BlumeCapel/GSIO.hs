@@ -19,7 +19,7 @@ import Language.Haskell.TH
 import Data.Maybe
 import Data.List
 import Data.List.Unique
-import Test.Test
+import Test.BCTest
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
@@ -63,7 +63,7 @@ getGS l d s =
    in groundState real
 
 testGS :: GroundState -> Bool
-testGS gs = cutEnergy gs == (GSIO.energy $ replica gs)
+testGS gs = toRational (cutEnergy gs) == toRational (energy $ replica gs)
 
 test1 :: Test
 test1 = do

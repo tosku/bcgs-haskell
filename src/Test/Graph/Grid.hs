@@ -7,7 +7,7 @@ import Data.Graph
 import Data.Graph.Grid
 import Data.List
 import Data.List.Unique
-import Test.Test
+import Test.BCTest
 
 fastTests :: [Test]
 fastTests = [ test2dpbc1

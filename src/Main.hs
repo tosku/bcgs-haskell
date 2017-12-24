@@ -3,6 +3,9 @@
 
 module Main where
 
+import Control.Monad.Par.IO
+import Control.Monad.IO.Class
+
 import Data.List
 import Data.Maybe
 import Data.Either.Unwrap
@@ -49,19 +52,21 @@ main = do
   putStrLn "reading job file"
   args <- getArgs
   let jobfile = args !! 0
-  (file,recs') <- GSIO.readJobfile jobfile
-
   let getJSON = B.readFile jobfile
-  readParams <- (eitherDecode <$> getJSON) :: IO (Either String JobArguments)
-  (file,recs') <- do
-        case readParams of
-           Left err -> do
-             putStrLn $ "problem with the job file" ++ err
-             return ("error",[])
-           Right args -> do
-             let !recs = runJob args
-             let file = show $ _resultfile args
-             return (file, recs)
-  I.writeFile file (encodeToLazyText recs')
-  putStrLn "\n"
-  putStrLn "The End!"
+  readParams <- (eitherDecode <$> getJSON) :: IO (Either String GSIO.JobArguments)
+  case readParams of
+       Left err -> do
+           putStrLn $ "problem with the job file" ++ err
+       Right args -> do
+          let file = show $ GSIO._resultfile args
+          putStrLn "job file"
+          putStrLn $ (GSIO.getJson args)
+          case GSIO.argumentsToParameters args of
+            Left err -> putStrLn $ "problem with the job file" ++ err
+            Right pars -> do
+              putStrLn "running"
+              let gss = GSIO.runJob pars
+              I.writeFile file (encodeToLazyText (GSIO.gsToJSON gss))
+              {-putStrLn $ show $ sum $ map (GSIO.magnetization . GSIO.observables) recs-}
+              putStrLn "\n"
+              putStrLn "The End!"

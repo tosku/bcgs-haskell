@@ -1,4 +1,4 @@
-{ "_l" : 20
+{ "_l" : 10
 , "_d"   : 2
 , "_delta": 
   { "rangefrom": 0
@@ -10,8 +10,8 @@
   , "rangeto": 1
   , "rangestep": 0.1
   }
-, "_disorderType" : "dichotomous"
-, "_realizations" : 10
+, "_disorderType" : "unimodal"
+, "_realizations" : 100
 , "_seedofSeeds" : 1409
-, "_resultfile"    : "l20.json"
+, "_resultfile"    : "l10.json"
 }

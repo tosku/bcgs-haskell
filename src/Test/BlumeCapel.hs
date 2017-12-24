@@ -6,7 +6,7 @@ import Data.List
 import Data.Either.Unwrap
 import Data.Maybe
 
-import Test.Test
+import Test.BCTest
 
 import Data.Graph
 import Data.Graph.Grid
