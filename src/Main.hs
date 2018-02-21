@@ -38,7 +38,6 @@ import qualified Data.Graph.Grid as Lat
 import qualified Data.BlumeCapel as BC
 import Data.BlumeCapel.GSNetwork
 import Data.Graph.PushRelabel.Pure
-{-import qualified Data.Graph.PushRelabel.STM as IOPR-}
 import qualified Data.BlumeCapel.GSIO as GSIO
 
 import Data.PRNG
@@ -61,12 +60,16 @@ main = do
           let file = show $ GSIO._resultfile args
           putStrLn "job file"
           putStrLn $ (GSIO.getJson args)
-          case GSIO.argumentsToParameters args of
+          let epars = GSIO.argumentsToParameters args
+          putStrLn $ show epars
+          case epars of
             Left err -> putStrLn $ "problem with the job file" ++ err
             Right pars -> do
               putStrLn "running"
               let gss = GSIO.runJob pars
+              {-gss <- GSIO.runJobIO pars-}
               I.writeFile file (encodeToLazyText (GSIO.gsToJSON gss))
               {-putStrLn $ show $ sum $ map (GSIO.magnetization . GSIO.observables) recs-}
+              {-putStrLn $ show gss-}
               putStrLn "\n"
               putStrLn "The End!"

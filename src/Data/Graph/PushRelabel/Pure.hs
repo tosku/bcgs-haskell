@@ -1,6 +1,6 @@
 {-|
 Module      : PushRelabel - Pure
-Description : Maximum Flow - Min Cut - Push relabel algorithm - Pure
+Description : Maximum Flow - Min Cut - Push relabel algorithm - Pure - Works only on directed
 Copyright   : Thodoris Papakonstantinou, 2017
 License     : GPL-3
 Maintainer  : mail@tpapak.com

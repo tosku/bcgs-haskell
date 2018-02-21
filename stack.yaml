@@ -2,11 +2,9 @@ flags: {}
 extra-package-dbs: []
 packages:
 - .
-- location:
-    git: https://github.com/tosku/prng.git
-    extra-dep: true
-    commit: a2c3872590ca00c215ef0cf7c9bd916ad7b0440e
 extra-deps:
+- git: git@github.com:tosku/prng
+  commit: 42bdc6a212e89238c649e144b322e7fa6ac9ca03
 - Histogram-0.1.0.2
 - aeson-1.2.3.0
 - binary-0.8.5.1
@@ -15,4 +13,4 @@ extra-deps:
 - fgl-5.6.0.0
 - natural-numbers-0.1.2.0
 - statistics-0.14.0.2
-resolver: lts-9.10
+resolver: lts-10.3

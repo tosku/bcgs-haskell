@@ -40,6 +40,7 @@ import           System.Posix
 import           System.Posix.IO.ByteString as BS
 import Control.Parallel.Strategies
 import qualified Control.Monad.Parallel as MPar
+import Control.Concurrent.STM
 
 import qualified Data.Graph.Inductive as I
 import qualified Data.Graph.Inductive.Graph as G
@@ -117,11 +118,11 @@ getGS params =
   let distype = if (disorderType params) == "unimodal"
       then BC.Unimodal
       else BC.Dichotomous
-      latt = Lat.graphCubicPBC $ Lat.PBCSquareLattice (l params) (d params)
-      rbbc = BC.RandomBond { BC.bondDisorder = distype (seed params) (r params)
-                        , BC.crystalField = (delta params)
-                        }
-      real = BC.realization'RBBC rbbc latt
+      !latt = Lat.graphCubicPBC $ Lat.PBCSquareLattice (l params) (d params)
+      !rbbc = BC.RandomBond { BC.bondDisorder = distype (seed params) (r params)
+                           , BC.crystalField = (delta params)
+                           }
+      !real = BC.realization'RBBC rbbc latt
    in groundState real
 
 saveGS :: GSParams -> GroundState -> GSRecord
@@ -172,11 +173,24 @@ argumentsToParameters args =
                        , delta = d
                        , seed = s
                        }) $ (,) <$> seeds <*> ((,) <$> rs <*> deltas)
-         
-runJob :: [GSParams] -> [(GSParams,GroundState)]
-runJob pars = zip pars $ map getGS pars
 
-gsToJSON :: [(GSParams,GroundState)] -> [GSRecord]
+runJobSTM :: [GSParams] -> IO [TVar (GSParams, GroundState)]
+runJobSTM pars = do
+  let gss = map getGS pars
+  mapM newTVarIO (zip pars gss)
+         
+runJobIO :: [GSParams] -> IO [(GSParams, GroundState)]
+runJobIO pars = do
+  putStrLn $ show $ length pars
+  results <- runJobSTM pars
+  mapM (\x -> atomically (readTVar x)) results
+
+runJob :: [GSParams] -> [(GSParams, GroundState)]
+runJob pars =
+  let gss = map getGS pars
+   in zip pars gss
+
+gsToJSON :: [(GSParams, GroundState)] -> [GSRecord]
 gsToJSON gss = map (\(par,gs) -> saveGS par gs) gss
 
 getJson :: ToJSON a => a -> String
