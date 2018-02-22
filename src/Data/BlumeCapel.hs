@@ -17,6 +17,7 @@ Portability : POSIX
  {-# LANGUAGE FlexibleInstances #-}
  {-# LANGUAGE Rank2Types #-}
  {-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
+ {-# LANGUAGE BangPatterns #-}
 
 
 module Data.BlumeCapel
@@ -106,7 +107,6 @@ getInteractions bc es =
   case bc of
     Dichotomous s d -> dichotomousJs es s d
     Unimodal s d -> unimodalJs es s d
-    otherwise -> M.empty
 
 dichotomousJs :: [Edge] -> Seed -> DisorderStrength -> Js
 dichotomousJs es s r = do
@@ -133,8 +133,8 @@ unimodalJs es s r =
       js = IM.fromList $ zip [1..] (map toRational (truncatedNormalSample rng μ σ f t n))
    in M.fromList $ zip es (map snd $ IM.toList js)
 
-data Spin s => Realization r s = Realization { lattice :: Graph
-                                             , interactions :: Js
+data Spin s => Realization r s = Realization { lattice :: !Graph
+                                             , interactions :: !Js
                                              , fieldCoupling :: s -> Energy
                                              }
 instance Spin s => Show (Realization r s) where
@@ -148,7 +148,7 @@ instance Spin s => Eq (Realization r s) where
 getFieldCoupling :: Spin s => Realization r s -> SpinConfiguration s -> [Energy]
 getFieldCoupling r c = map ((fieldCoupling r) . fromJust . (spin c)) (vertices (lattice r))
 
-data Spin s => Replica r s = Replica { realization :: Realization r s
+data Spin s => Replica r s = Replica { realization :: !(Realization r s)
                                      , configuration :: SpinConfiguration s
                                      , energy :: Energy
                                      }

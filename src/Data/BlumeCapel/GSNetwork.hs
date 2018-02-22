@@ -13,6 +13,7 @@ Portability : POSIX
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE BangPatterns #-}
 
 
 module Data.BlumeCapel.GSNetwork
@@ -20,6 +21,8 @@ module Data.BlumeCapel.GSNetwork
   , gsBCCapacities
   , network'RBBC
   , groundState
+  , getGSMag
+  , getGSEnergy
   , Network (..)
   , GroundState (..)
   ) where
@@ -139,6 +142,18 @@ gsConfiguration rg =
   let (svs,tvs) = stCut rg
    in SpinConfiguration $ IM.fromList 
    $ map (\v -> (v,Up)) svs ++ map (\v -> (v,Zero)) tvs
+
+getGSMag :: GroundState -> Double
+getGSMag gs = 
+  let mmag = (getMagnetization . configuration . replica) gs
+      n = size $ realization $ replica gs
+   in (fromRational mmag) / (fromIntegral n)
+
+getGSEnergy :: GroundState -> Double
+getGSEnergy gs = 
+  let enn = cutEnergy gs
+      n = size $ realization $ replica gs
+   in (fromRational enn) / (fromIntegral n)
 
 data GroundState = GroundState { replica :: RBBCReplica
                                , cutEnergy :: Energy

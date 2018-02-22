@@ -39,6 +39,7 @@ import qualified Data.BlumeCapel as BC
 import Data.BlumeCapel.GSNetwork
 import Data.Graph.PushRelabel.Pure
 import qualified Data.BlumeCapel.GSIO as GSIO
+import Control.Concurrent.ParallelIO.Global
 
 import Data.PRNG
 import Data.PRNG.MTRNG
@@ -57,19 +58,21 @@ main = do
        Left err -> do
            putStrLn $ "problem with the job file" ++ err
        Right args -> do
-          let file = show $ GSIO._resultfile args
+          let file = GSIO._resultfile args
           putStrLn "job file"
           putStrLn $ (GSIO.getJson args)
           let epars = GSIO.argumentsToParameters args
-          putStrLn $ show epars
           case epars of
             Left err -> putStrLn $ "problem with the job file" ++ err
             Right pars -> do
               putStrLn "running"
-              let gss = GSIO.runJob pars
+              {-let gss = GSIO.runJob pars-}
+              results <- GSIO.runJob pars
               {-gss <- GSIO.runJobIO pars-}
-              I.writeFile file (encodeToLazyText (GSIO.gsToJSON gss))
-              {-putStrLn $ show $ sum $ map (GSIO.magnetization . GSIO.observables) recs-}
-              {-putStrLn $ show gss-}
+              I.writeFile file (encodeToLazyText (GSIO.gsToJSON results))
+              {-parallel $ M.map (\gs -> putStrLn $ show $ getMag gs) gss-}
+              {-putStrLn $ show $ M.size gss-}
+              {-let mags = sum $ M.map getMag gss-}
+              {-putStrLn $ show mags-}
               putStrLn "\n"
               putStrLn "The End!"

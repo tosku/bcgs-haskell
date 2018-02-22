@@ -41,6 +41,7 @@ import           System.Posix.IO.ByteString as BS
 import Control.Parallel.Strategies
 import qualified Control.Monad.Parallel as MPar
 import Control.Concurrent.STM
+import Control.Concurrent.ParallelIO.Global
 
 import qualified Data.Graph.Inductive as I
 import qualified Data.Graph.Inductive.Graph as G
@@ -111,22 +112,22 @@ data GSParams = GSParams
   , disorderType :: String 
   , delta :: BC.Delta 
   , seed :: Int
-  } deriving (Show,Eq)
+  } deriving (Show,Eq,Ord)
 
 getGS :: GSParams -> GroundState
 getGS params =
   let distype = if (disorderType params) == "unimodal"
       then BC.Unimodal
       else BC.Dichotomous
-      !latt = Lat.graphCubicPBC $ Lat.PBCSquareLattice (l params) (d params)
-      !rbbc = BC.RandomBond { BC.bondDisorder = distype (seed params) (r params)
+      latt = Lat.graphCubicPBC $ Lat.PBCSquareLattice (l params) (d params)
+      rbbc = BC.RandomBond { BC.bondDisorder = distype (seed params) (r params)
                            , BC.crystalField = (delta params)
                            }
-      !real = BC.realization'RBBC rbbc latt
+      real = BC.realization'RBBC rbbc latt
    in groundState real
 
 saveGS :: GSParams -> GroundState -> GSRecord
-saveGS !args !gs =
+saveGS args gs =
   let nvs = fromIntegral $ (numVertices $ BC.lattice $ BC.realization $ replica gs)
       en = fromRational $ BC.energy $ replica gs
       mag = (fromRational $ BC.getMagnetization $ BC.configuration $ replica gs) / nvs :: Double
@@ -179,19 +180,51 @@ runJobSTM pars = do
   let gss = map getGS pars
   mapM newTVarIO (zip pars gss)
          
+{-runJobIO :: [GSParams] -> IO [(GSParams, GroundState)]-}
+{-runJobIO pars = do-}
+  {-putStrLn $ show $ length pars-}
+  {-results <- runJobSTM pars-}
+  {-parallel $ map (\x -> atomically (readTVar x)) results-}
+
 runJobIO :: [GSParams] -> IO [(GSParams, GroundState)]
 runJobIO pars = do
   putStrLn $ show $ length pars
-  results <- runJobSTM pars
-  mapM (\x -> atomically (readTVar x)) results
+  parallel $ map (\par -> do
+    let gs = getGS par
+    putStrLn $ show (cutEnergy gs)
+    return $ (par, gs)) pars
 
-runJob :: [GSParams] -> [(GSParams, GroundState)]
-runJob pars =
-  let gss = map getGS pars
-   in zip pars gss
+type Results = M.Map GSParams GroundState
 
-gsToJSON :: [(GSParams, GroundState)] -> [GSRecord]
-gsToJSON gss = map (\(par,gs) -> saveGS par gs) gss
+runJob :: [GSParams] -> IO Results
+runJob pars = do
+  putStrLn $ show $ length pars
+  results <- newTVarIO (M.empty :: Results)
+  let updateResults :: GSParams -> GroundState -> STM ()
+      updateResults par gs = do
+        res <- readTVar results
+        let res' = M.insert par gs res
+        writeTVar results res'
+  let getResults :: IO Results
+      getResults = do
+        res <- atomically $ readTVar results
+        return res
+  parallel_ 
+    $ map (\par -> do 
+      let gs = getGS par
+          !mag = getGSMag gs
+          !en = getGSEnergy gs
+      atomically $ updateResults par gs
+      res <- getResults
+      let pr = M.size res
+      hPutChar stdout '\r' 
+      hPutStr stdout $ show pr ++ "    "
+      hFlush stdout
+      ) pars
+  getResults
+
+gsToJSON :: Results -> [GSRecord]
+gsToJSON gss = map (\(par,gs) -> saveGS par gs) $ M.toList gss
 
 getJson :: ToJSON a => a -> String
 getJson d = TXT.unpack $ decodeUtf8 $ BSL.toStrict (encodePretty d)
