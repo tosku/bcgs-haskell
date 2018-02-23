@@ -34,6 +34,7 @@ import Data.Text.Encoding
 import           System.Environment
 import qualified Data.ByteString.Lazy  as B
 import qualified Data.ByteString.Char8 as C
+import qualified Data.Bits as Bits
 import           GHC.Generics
 import           System.IO
 import           System.Posix
@@ -86,19 +87,30 @@ data Observables = Observables
   , configuration :: BC.BCConfiguration
   } deriving (Show, Generic)
 instance ToJSON Observables where
-  toJSON obs = 
-    let encodeConf (BC.SpinConfiguration conf) = 
-          map (\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $
-            IM.toList conf
-    in object ["energy" .= energy obs
+  toJSON obs = object ["energy" .= energy obs
                       , "mag" .= magnetization obs 
                       , "configuration" .= encodeConf (configuration obs)]
+
+encodeConf :: BC.BCConfiguration -> String
+encodeConf (BC.SpinConfiguration conf) = 
+  let intlist = map (\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $
+                      IM.toList conf
+      {-isres = foldl' (\(i,ac) x -> -}
+        {-(i+1, if x==1 then -}
+                   {-Bits.setBit ac i -}
+                   {-else ac)) (0,Bits.zeroBits) intlist -}
+   {-in snd isres-}
+  in foldr (\x ac-> 
+            let c = show x
+             in c ++ ac)
+         "" intlist
+
 
 data GSRecord = GSRecord
   { linear_size :: Int
   , dimensions :: Int
-  , field :: Double
-  , disorder_strength :: Double
+  , field :: Rational
+  , disorder_strength :: Rational
   , disorder_type :: String
   , realization_id :: Int
   , observables :: Observables
@@ -135,8 +147,8 @@ saveGS args gs =
       gsrec = GSRecord
                 { linear_size = fromIntegral $ l args
                 , dimensions = fromIntegral $ d args
-                , field = fromRational $ delta args
-                , disorder_strength = fromRational $ r args
+                , field =  delta args
+                , disorder_strength =  r args
                 , disorder_type = disorderType args
                 , realization_id = seed args
                 , observables = Observables 
@@ -228,3 +240,6 @@ gsToJSON gss = map (\(par,gs) -> saveGS par gs) $ M.toList gss
 
 getJson :: ToJSON a => a -> String
 getJson d = TXT.unpack $ decodeUtf8 $ BSL.toStrict (encodePretty d)
+
+{-sumRealizations :: Results -> Delta -> DisorderStrength -> [(,)]-}
+
