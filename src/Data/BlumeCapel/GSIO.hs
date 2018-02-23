@@ -210,7 +210,7 @@ type Results = M.Map GSParams GroundState
 
 runJob :: [GSParams] -> IO Results
 runJob pars = do
-  putStrLn $ show $ length pars
+  putStrLn $ "total: " ++ (show $ length pars)
   results <- newTVarIO (M.empty :: Results)
   let updateResults :: GSParams -> GroundState -> STM ()
       updateResults par gs = do
@@ -229,9 +229,9 @@ runJob pars = do
       atomically $ updateResults par gs
       res <- getResults
       let pr = M.size res
-      hPutChar stdout '\r' 
-      hPutStr stdout $ show pr ++ "    "
-      hFlush stdout
+      hPutChar stderr '\r' 
+      hPutStr stderr $ "done " ++ (show pr)
+      hFlush stderr
       ) pars
   getResults
 
