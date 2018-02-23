@@ -3,7 +3,7 @@ extra-package-dbs: []
 packages:
 - .
 extra-deps:
-- git: git@github.com:tosku/prng
+- git: https://github.com/tosku/prng.git
   commit: 42bdc6a212e89238c649e144b322e7fa6ac9ca03
 - Histogram-0.1.0.2
 - aeson-1.2.3.0
