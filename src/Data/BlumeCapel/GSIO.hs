@@ -44,16 +44,12 @@ import qualified Control.Monad.Parallel as MPar
 import Control.Concurrent.STM
 import Control.Concurrent.ParallelIO.Global
 
-import qualified Data.Graph.Inductive as I
-import qualified Data.Graph.Inductive.Graph as G
-import qualified Data.Graph.Inductive.Query.MaxFlow as MF
-import qualified Data.Graph.Inductive.Query.BFS as IBFS
+import Data.Graph.AdjacencyList
+import qualified Data.Graph.AdjacencyList.Grid as Lat
+import Data.Graph.AdjacencyList.PushRelabel.Pure
 
-import Data.Graph
-import qualified Data.Graph.Grid as Lat
 import qualified Data.BlumeCapel as BC
 import Data.BlumeCapel.GSNetwork
-import Data.Graph.PushRelabel.Pure
 {-import qualified Data.Graph.PushRelabel.STM as IOPR-}
 
 import Data.PRNG
@@ -95,11 +91,6 @@ encodeConf :: BC.BCConfiguration -> String
 encodeConf (BC.SpinConfiguration conf) = 
   let intlist = map (\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $
                       IM.toList conf
-      {-isres = foldl' (\(i,ac) x -> -}
-        {-(i+1, if x==1 then -}
-                   {-Bits.setBit ac i -}
-                   {-else ac)) (0,Bits.zeroBits) intlist -}
-   {-in snd isres-}
   in foldr (\x ac-> 
             let c = show x
              in c ++ ac)
@@ -107,13 +98,15 @@ encodeConf (BC.SpinConfiguration conf) =
 
 
 data GSRecord = GSRecord
-  { linear_size :: Int
-  , dimensions :: Int
-  , field :: Rational
-  , disorder_strength :: Rational
-  , disorder_type :: String
-  , realization_id :: Int
-  , observables :: Observables
+  { linear_size :: !Int
+  , dimensions :: !Int
+  {-, field :: !Rational-}
+  {-, disorder_strength :: !Rational-}
+  , field :: !Double
+  , disorder_strength :: !Double
+  , disorder_type :: !String
+  , realization_id :: !Int
+  , observables :: !Observables
   } deriving (Show, Generic)
 instance ToJSON GSRecord
 
@@ -147,8 +140,10 @@ saveGS args gs =
       gsrec = GSRecord
                 { linear_size = fromIntegral $ l args
                 , dimensions = fromIntegral $ d args
-                , field =  delta args
-                , disorder_strength =  r args
+                {-, field =  delta args-}
+                {-, disorder_strength =  r args-}
+                , field = fromRational $ delta args
+                , disorder_strength = fromRational $ r args
                 , disorder_type = disorderType args
                 , realization_id = seed args
                 , observables = Observables 
@@ -187,59 +182,54 @@ argumentsToParameters args =
                        , seed = s
                        }) $ (,) <$> seeds <*> ((,) <$> rs <*> deltas)
 
-runJobSTM :: [GSParams] -> IO [TVar (GSParams, GroundState)]
-runJobSTM pars = do
-  let gss = map getGS pars
-  mapM newTVarIO (zip pars gss)
-         
-{-runJobIO :: [GSParams] -> IO [(GSParams, GroundState)]-}
-{-runJobIO pars = do-}
-  {-putStrLn $ show $ length pars-}
-  {-results <- runJobSTM pars-}
-  {-parallel $ map (\x -> atomically (readTVar x)) results-}
-
-runJobIO :: [GSParams] -> IO [(GSParams, GroundState)]
-runJobIO pars = do
-  putStrLn $ show $ length pars
-  parallel $ map (\par -> do
-    let gs = getGS par
-    putStrLn $ show (cutEnergy gs)
-    return $ (par, gs)) pars
-
 type Results = M.Map GSParams GroundState
-
-runJob :: [GSParams] -> IO Results
-runJob pars = do
-  putStrLn $ "total: " ++ (show $ length pars)
-  results <- newTVarIO (M.empty :: Results)
-  let updateResults :: GSParams -> GroundState -> STM ()
-      updateResults par gs = do
-        res <- readTVar results
-        let res' = M.insert par gs res
-        writeTVar results res'
-  let getResults :: IO Results
-      getResults = do
-        res <- atomically $ readTVar results
-        return res
-  parallel_ 
-    $ map (\par -> do 
-      let gs = getGS par
-          !mag = getGSMag gs
-          !en = getGSEnergy gs
-      atomically $ updateResults par gs
-      res <- getResults
-      let pr = M.size res
-      hPutChar stderr '\r' 
-      hPutStr stderr $ "done " ++ (show pr)
-      hFlush stderr
-      ) pars
-  getResults
-
-gsToJSON :: Results -> [GSRecord]
-gsToJSON gss = map (\(par,gs) -> saveGS par gs) $ M.toList gss
 
 getJson :: ToJSON a => a -> String
 getJson d = TXT.unpack $ decodeUtf8 $ BSL.toStrict (encodePretty d)
 
-{-sumRealizations :: Results -> Delta -> DisorderStrength -> [(,)]-}
+
+gsToJSON :: Results -> [GSRecord]
+gsToJSON gss = map (\(par,gs) -> saveGS par gs) $ M.toList gss
+
+runJob :: String -> IO ()
+runJob jobfile = do
+  let getJSON = B.readFile jobfile
+  readParams <- (eitherDecode <$> getJSON) :: IO (Either String JobArguments)
+  case readParams of
+       Left err -> do
+           putStrLn $ "problem with the job file" ++ err
+       Right args -> do
+          putStrLn "job file"
+          putStrLn $ (getJson args)
+          let epars = argumentsToParameters args
+          case epars of
+            Left err -> 
+              putStrLn $ "problem with the job file" ++ err
+            Right pars -> do
+              putStrLn "running"
+              putStrLn $ "total: " ++ (show $ length pars)
+              results <- newTVarIO (M.empty :: Results)
+              let file = _resultfile args
+                  updateResults :: GSParams -> GroundState -> STM ()
+                  updateResults par gs = do
+                    res <- readTVar results
+                    let res' = M.insert par gs res
+                    writeTVar results res'
+                  getResults :: IO Results
+                  getResults = do
+                    res <- atomically $ readTVar results
+                    return res
+              parallel_ 
+                $ map (\par -> do
+                    let !gs = getGS par
+                    atomically $ updateResults par gs
+                    pr <- getResults
+                    hFlush stdout
+                    hPutChar stdout '\r' 
+                    hPutStr stdout $ "done " ++ (show $ M.size pr)
+                     ++ " mag: " ++ (show $ getGSMag gs)
+                    hFlush stdout
+                      ) pars
+              results <- getResults
+              I.writeFile file (encodeToLazyText (gsToJSON results))
 

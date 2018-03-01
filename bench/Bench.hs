@@ -47,8 +47,4 @@ main = do
                                                    bench "20^3 unimodal weights" $ nf weights ureal
                                                  , bench "40^3 unimodal weights" $ nf weights ureal2
                     ]
-              , bgroup "Blume-Capel realization" [ 
-                                                   bench "20^3 Graph.BFS" $ nf (\x -> level $ adjBFS x (adjacencyMap x) 0) fg
-                                                 , bench "20^3 FGL BFS" $ nf (\x -> IBFS.level 0 x) mfg
-                ]
               ]

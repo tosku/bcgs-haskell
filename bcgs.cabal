@@ -15,99 +15,61 @@ extra-source-files:  README.md
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Data.Graph
-                     , Data.Graph.Grid
-                     , Test.Graph.Grid
-                     , Data.Graph.Network
-                     , Data.Graph.BFS
-                     , Test.Graph.BFS
-                     , Data.Graph.PushRelabel.Internal
-                     , Data.Graph.PushRelabel.Pure
-                     , Data.Graph.PushRelabel.STM
-                     , Data.BlumeCapel
-                     , Test.BlumeCapel
+  exposed-modules:     Data.BlumeCapel
                      , Data.BlumeCapel.GSNetwork
-                     , Test.BlumeCapel.GSNetwork
                      , Data.BlumeCapel.GSIO
-                     , Test.BlumeCapel.GSIO
-                     , Test.BCTest
   build-depends:       base >= 4.7 && < 5
-                     , ansi-terminal
-                     , mtl >= 2.2.1
-                     , natural-numbers
-                     , random
-                     , mersenne-random-pure64 >= 0.2.0.5
                      , vector
                      , stm >= 2.4.4.1
-                     , template-haskell >= 2.11.1.0
                      , Unique
                      , monad-par >= 0.3.4.8
                      , containers >= 0.5.10.2
-                     , unix
-                     , async >= 2.1.1
                      , aeson
                      , aeson-pretty
+                     , unix
                      , text >= 1.2.2.2
                      , async >= 2.1.1
                      , bytestring
-                     , fgl >= 5.5.3.1
-                     , prng 
                      , either-unwrap >= 1.1
-                     , stm >= 2.4.4.1
                      , parallel >= 3.2.1.0
                      , parallel-io >= 0.3.3
                      , deepseq >= 1.4.3.0
                      , monad-parallel >= 0.7.2.2
                      , monad-par-extras
+                     , prng 
+                     , graph
   default-language:    Haskell2010
 
 executable bcgs-exe
   hs-source-dirs:      src
   main-is:             Main.hs
-  ghc-options:         -O2 -threaded -eventlog -rtsopts -with-rtsopts=-N
-  --ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
-  other-modules:       Data.Graph
-                     , Data.Graph.BFS
-                     , Test.Graph.BFS
-                     , Data.Graph.Network
-                     , Data.Graph.PushRelabel.Internal
-                     , Data.Graph.PushRelabel.Pure
-                     , Data.Graph.PushRelabel.STM
-                     , Data.Graph.Grid
-                     , Test.Graph.Grid
-                     , Data.BlumeCapel
-                     , Test.BlumeCapel
+  --ghc-options:         -O2 -threaded -eventlog -rtsopts -with-rtsopts=-N
+  ghc-options:         -O2 -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       Data.BlumeCapel
                      , Data.BlumeCapel.GSNetwork
-                     , Test.BlumeCapel.GSNetwork
                      , Data.BlumeCapel.GSIO
-                     , Test.BlumeCapel.GSIO
-                     , Test.BCTest
   build-depends:       base >= 4.7 && < 5
-                     , mtl >= 2.2.1
-                     , natural-numbers
-                     , random
-                     , mersenne-random-pure64 >= 0.2.0.5
+                     , bcgs
+                     , vector
                      , stm >= 2.4.4.1
-                     , parallel >= 3.2.1.0
-                     , parallel-io >= 0.3.3
+                     , Unique
                      , monad-par >= 0.3.4.8
                      , containers >= 0.5.10.2
-                     , vector
-                     , template-haskell >= 2.11.1.0
-                     , Unique
-                     , unix
-                     , async >= 2.1.1
-                     , bytestring
-                     , text >= 1.2.2.2
                      , aeson
                      , aeson-pretty
-                     , prng 
+                     , unix
+                     , text >= 1.2.2.2
+                     , async >= 2.1.1
+                     , bytestring
                      , either-unwrap >= 1.1
+                     , parallel >= 3.2.1.0
+                     , parallel-io >= 0.3.3
+                     , deepseq >= 1.4.3.0
                      , monad-parallel >= 0.7.2.2
-                     , gnuplot >= 0.5.4.2
-                     , fgl >= 5.5.3.1
-                     , ansi-terminal
-                     , terminal-progress-bar >= 0.1
+                     , monad-par-extras
+                     , vector
+                     , prng
+                     , graph
   default-extensions:  DeriveGeneric
   default-language:    Haskell2010
 
@@ -115,13 +77,20 @@ test-suite bcgs-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       base
-                     , ansi-terminal
-                     , mtl >= 2.2.1
-                     , random
-                     , text >= 1.2.2.2
-                     , fgl >= 5.5.3.1
+  build-depends:       base >=4.7 && <5
                      , bcgs
+                     , tesths
+                     , vector
+                     , aeson
+                     , either-unwrap >= 1.1
+                     , parallel >= 3.2.1.0
+                     , containers
+                     , bytestring
+                     , prng
+                     , graph
+  other-modules:       Test.BlumeCapel
+                     , Test.BlumeCapel.GSNetwork
+                     , Test.BlumeCapel.GSIO
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

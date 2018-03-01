@@ -2,15 +2,16 @@ flags: {}
 extra-package-dbs: []
 packages:
 - .
+#- ../../graph/
+resolver: lts-10.3
 extra-deps:
 - git: https://github.com/tosku/prng.git
   commit: 42bdc6a212e89238c649e144b322e7fa6ac9ca03
+- git: https://github.com/tosku/graph.git
+  commit: 416dec1ff574d065297ccaf98df338ce6df93428
+- git: https://github.com/tosku/tesths.git
+  commit: 0fb1ba49641e87b843556cd1441240ef602fcf2b
 - Histogram-0.1.0.2
-- aeson-1.2.3.0
-- binary-0.8.5.1
-- containers-0.5.10.2
-- criterion-1.2.3.0
-- fgl-5.6.0.0
+- Unique-0.4.7.2
 - natural-numbers-0.1.2.0
-- statistics-0.14.0.2
-resolver: lts-10.3
+allow-newer: true

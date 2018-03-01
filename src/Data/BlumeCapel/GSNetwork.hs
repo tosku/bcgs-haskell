@@ -6,9 +6,8 @@ License     : GPL-3
 Maintainer  : mail@tpapak.com
 Stability   : experimental
 Portability : POSIX
+|-}
 
-
- -}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -36,10 +35,10 @@ import qualified Data.Map.Lazy as M
 import qualified Data.Vector as V
 import qualified Data.IntMap.Lazy as IM
 
-import Data.Graph
-import Data.Graph.Network
-import Data.Graph.PushRelabel.Pure
 import Data.BlumeCapel
+
+import Data.Graph.AdjacencyList.Network
+import Data.Graph.AdjacencyList.PushRelabel.Pure
 
 network'RBBC :: RBBC -> Network 
 network'RBBC r = Network { graph = let g = lattice r 

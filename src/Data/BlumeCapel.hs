@@ -11,7 +11,8 @@ Portability : POSIX
 - get Ennergy of lattice
 - get Magnetization of lattice
 
- -}
+|-}
+
  {-# LANGUAGE MultiParamTypeClasses #-}
  {-# LANGUAGE FunctionalDependencies #-}
  {-# LANGUAGE FlexibleInstances #-}
@@ -22,8 +23,15 @@ Portability : POSIX
 
 module Data.BlumeCapel
     ( Graph (..)
+    , Edge (..)
+    , Vertex (..)
+    , numEdges
     , Energy
     , showEnergy
+    , from 
+    , to
+    , toTuple
+    , fromTuple
     , BondDisorder (..)
     , DisorderStrength
     , Delta -- ^ Crysta field strength Double
@@ -42,18 +50,19 @@ module Data.BlumeCapel
     , getMagnetization
     ) where
 
-import           GHC.Generics
+import qualified GHC.Generics as GEN
 
 import Data.List
 import Data.Maybe
 import Data.Either
+import Data.Ratio
 import qualified Data.Vector as V
 import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IM
 
 import Data.PRNG
 import Data.PRNG.MTRNG
-import Data.Graph
+import Data.Graph.AdjacencyList
 
 type Energy = Rational
 showEnergy :: Energy -> String
@@ -100,7 +109,7 @@ data (Spin s) => Field s = Field (IM.IntMap Energy)
 
 data BondDisorder = Dichotomous Seed DisorderStrength |
   Unimodal Seed DisorderStrength
-  deriving (Show,Eq,Generic)
+  deriving (Show,Eq,GEN.Generic)
 
 getInteractions :: BondDisorder -> [Edge] -> Js
 getInteractions bc es =
@@ -125,12 +134,13 @@ dichotomousJs es s r = do
 unimodalJs :: [Edge] -> Seed -> DisorderStrength -> Js
 unimodalJs es s r = 
   let n = length es
-      rng = getRNG s :: MTRNG
+      newseed = s + (fromIntegral $ numerator r) -- ^ (s,r) pair should define the realization
+      rng = getRNG newseed :: MTRNG
       μ = 1
       σ = fromRational r
       f = 0
       t = 2
-      js = IM.fromList $ zip [1..] (map toRational (truncatedNormalSample rng μ σ f t n))
+      !js = IM.fromList $ zip [1..] (map toRational (truncatedNormalSample rng μ σ f t n))
    in M.fromList $ zip es (map snd $ IM.toList js)
 
 data Spin s => Realization r s = Realization { lattice :: !Graph
@@ -173,7 +183,7 @@ type RBBCReplica = Replica RandomBond SpinOne
 size :: Spin s => Realization r s -> Int
 size r = numVertices $ lattice r
 
-realization'RBBC :: RandomBond -> Graph -> Realization RandomBond SpinOne
+realization'RBBC :: RandomBond -> Graph -> RBBC
 realization'RBBC r g = Realization { lattice = g
                                    , interactions = getInteractions (bondDisorder r) (edges g)
                                    , fieldCoupling = (\s -> (project s s) * (crystalField r))

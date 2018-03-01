@@ -1,17 +1,17 @@
-{ "_l" : 30
+{ "_l" : 32
 , "_d"   : 2
 , "_delta": 
-  { "rangefrom": 0.0
-  , "rangeto": 2.0
-  , "rangestep": 0.1
+  { "rangefrom": 2.00
+  , "rangeto": 2.00
+  , "rangestep": 0.01
   }
 , "_disorder": 
-  { "rangefrom": 0.847
-  , "rangeto": 0.847
+  { "rangefrom": 0.4
+  , "rangeto": 1
   , "rangestep": 0.1
   }
 , "_disorderType" : "unimodal"
-, "_realizations" : 1
+, "_realizations" : 10
 , "_seedofSeeds" : 1409
 , "_resultfile"    : "results.json"
 }
