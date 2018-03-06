@@ -37,36 +37,28 @@ import qualified Data.IntMap.Lazy as IM
 
 import Data.BlumeCapel
 
+import Data.Graph.AdjacencyList
 import Data.Graph.AdjacencyList.Network
 import Data.Graph.AdjacencyList.PushRelabel.Pure
 
 network'RBBC :: RBBC -> Network 
-network'RBBC r = Network { graph = let g = lattice r 
-                                    in Graph { vertices = [0 .. (fromIntegral (size r) + 1)]
-                                             , edges = networkEdges r
-                                             , neighbors = (\v -> fromJust $ IM.lookup v $ networkNeighbors r)
-                                             , outEdges = outEdges g
-                                             {-, edgeIndex = mapEdgeIndx (graph $ network'RBBC r)-}
-                                             , edgeIndex = netEdgeIx r 
-                                             {-, edgeIndex = (\e -> let s = 0-}
-                                                                      {-t = size r + 1-}
-                                                                   {-in case from e == s || to e == t of-}
-                                                                        {-True -> {-# SCC edgeMAP #-} netEdgeIx r e-}
-                                                                        {-False -> {-# SCC edgeIX #-} edgeIndex (lattice r) e-}
-                                                           {-)-}
-
-                                             }
-                         , source = 0
-                         , sink = size r + 1
-                         , capacities = gsBCCapacities r
-                         , flow = M.empty
-                         }
+network'RBBC r = 
+  Network { graph = 
+              let g = lattice r 
+                  vs = [0 .. (fromIntegral (size r) + 1)]
+                  neis = (\v -> fromJust $ IM.lookup v $ networkNeighbors r)
+               in createGraph vs neis
+          , source = 0
+          , sink = size r + 1
+          , capacities = gsBCCapacities r
+          , flow = M.empty
+          }
 
 weights :: RBBC -> IM.IntMap Capacity
 weights r = let js = interactions r 
                 g = lattice r
                 wi v = let j e = fromJust $ M.lookup e js
-                        in (fieldCoupling r Up) - (sum $ map j (outEdges g v))
+                        in (fieldCoupling r Up) - (sum $ map (\n -> j (fromTuple (v,n))) (neighbors g v))
               in IM.fromList $ zip (vertices g) (map wi (vertices g))
 
 netEdgeIx r (Edge f t) = IM.lookup t $ fromJust (IM.lookup f (netEdgeMap r))
@@ -74,11 +66,15 @@ netEdgeIx r (Edge f t) = IM.lookup t $ fromJust (IM.lookup f (netEdgeMap r))
 netEdgeMap :: RBBC -> IM.IntMap (IM.IntMap Int)
 netEdgeMap r =
   let els = zip (networkEdges r) [1..]
-   in foldl' (\ac ((Edge f t), i) -> let med = IM.lookup f ac 
-                                      in case med of 
-                                           Just ed -> IM.insert f (IM.insert t i ed) ac  
-                                           Nothing -> IM.insert f (IM.singleton t i) ac 
-             ) IM.empty els 
+   in foldl' 
+        (\ac ((Edge f t), i) 
+          -> let med = IM.lookup f ac 
+              in case med of 
+                   Just ed 
+                     -> IM.insert f (IM.insert t i ed) ac  
+                   Nothing 
+                     -> IM.insert f (IM.singleton t i) ac 
+        ) IM.empty els 
 
 networkNeighbors :: RBBC -> IM.IntMap [Vertex]
 networkNeighbors r = IM.fromList $ zip vs (map getnn vs)
@@ -93,10 +89,10 @@ networkNeighbors r = IM.fromList $ zip vs (map getnn vs)
           getnn v 
             | v == s = map to (fst $ sourceTargetEdges r)
             | v == t = []
-            | otherwise = let innerNNs = map (\e -> snd $ toTuple e) (outEdges (lattice r) v)
-                             in case fromJust (IM.lookup v wis) >= 0 of
-                                  True -> t:innerNNs
-                                  False -> innerNNs
+            | otherwise = let !innerNNs = map (\e -> snd $ toTuple e) (map (\n -> fromTuple (v,n)) (neighbors (lattice r) v))
+                           in case fromJust (IM.lookup v wis) >= 0 of
+                                True -> t:innerNNs
+                                False -> innerNNs
 
 netEdgeCaps :: RBBC -> [(Edge, Capacity)]
 netEdgeCaps r = 

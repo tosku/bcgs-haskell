@@ -2,13 +2,13 @@ flags: {}
 extra-package-dbs: []
 packages:
 - .
-#- ../../graph/
+- ../../graph/
 resolver: lts-10.3
 extra-deps:
 - git: https://github.com/tosku/prng.git
   commit: 42bdc6a212e89238c649e144b322e7fa6ac9ca03
-- git: https://github.com/tosku/graph.git
-  commit: 416dec1ff574d065297ccaf98df338ce6df93428
+#- git: https://github.com/tosku/graph.git
+  #commit: 416dec1ff574d065297ccaf98df338ce6df93428
 - git: https://github.com/tosku/tesths.git
   commit: 0fb1ba49641e87b843556cd1441240ef602fcf2b
 - Histogram-0.1.0.2
