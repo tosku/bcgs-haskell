@@ -68,8 +68,8 @@ test2 :: Test
 test2 = do
   let name = "Integration Test: \n Cut Energy equals realizations Hamiltonian 100 realizations L20 d2"
       rng = getRNG 13 :: MTRNG
-      seeds = map (floor . ((*) 10000)) $ uniformSample rng 1
-      gss = map (getGS 10 2) seeds
+      seeds = map (floor . ((*) 10000)) $ uniformSample rng 100
+      gss = map (getGS 20 2) seeds
       out = filter (not . testGS) gss
   case null out of
     True -> testPassed name "passed!"

@@ -44,8 +44,7 @@ import Data.Graph.AdjacencyList.PushRelabel.Pure
 network'RBBC :: RBBC -> Network 
 network'RBBC r = 
   Network { graph = 
-              let g = lattice r 
-                  vs = [0 .. (fromIntegral (size r) + 1)]
+              let vs = [0 .. (fromIntegral (size r) + 1)]
                   neis = (\v -> fromJust $ IM.lookup v $ networkNeighbors r)
                in createGraph vs neis
           , source = 0

@@ -80,13 +80,17 @@ instance ToJSON JobArguments
 data Observables = Observables
   { energy :: Double
   , magnetization :: Double
+  , zeroclusters :: BC.ZeroDistribution
   , configuration :: BC.BCConfiguration
   } deriving (Show, Generic)
+{-instance FromJSON Observables-}
+{-instance ToJSON Observables-}
+
 instance ToJSON Observables where
   toJSON obs = object ["energy" .= energy obs
                       , "mag" .= magnetization obs 
+                      , "zeroclusters" .= zeroclusters obs
                       , "configuration" .= encodeConf (configuration obs)]
-
 encodeConf :: BC.BCConfiguration -> String
 encodeConf (BC.SpinConfiguration conf) = 
   let intlist = map (\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $
@@ -95,7 +99,6 @@ encodeConf (BC.SpinConfiguration conf) =
             let c = show x
              in c ++ ac)
          "" intlist
-
 
 data GSRecord = GSRecord
   { linear_size :: !Int
@@ -137,6 +140,7 @@ saveGS args gs =
       en = fromRational $ BC.energy $ replica gs
       mag = (fromRational $ BC.getMagnetization $ BC.configuration $ replica gs) / nvs :: Double
       conf = BC.configuration $ replica gs
+      zclusters = BC.zeroCusterSizes $ replica gs
       gsrec = GSRecord
                 { linear_size = fromIntegral $ l args
                 , dimensions = fromIntegral $ d args
@@ -149,6 +153,7 @@ saveGS args gs =
                 , observables = Observables 
                   { energy = en
                   , magnetization = mag
+                  , zeroclusters = zclusters
                   , configuration = conf
                   }
                 }

@@ -44,10 +44,12 @@ module Data.BlumeCapel
     , Replica (..)
     , SpinConfiguration (..)
     , BCConfiguration (..)
+    , ZeroDistribution (..)
     , size
     , realization'RBBC
     , replica'RBBC
     , getMagnetization
+    , zeroCusterSizes
     ) where
 
 import qualified GHC.Generics as GEN
@@ -63,6 +65,7 @@ import qualified Data.IntMap.Strict as IM
 import Data.PRNG
 import Data.PRNG.MTRNG
 import Data.Graph.AdjacencyList
+import Data.Graph.AdjacencyList.BFS
 
 type Energy = Rational
 showEnergy :: Energy -> String
@@ -159,7 +162,7 @@ getFieldCoupling :: Spin s => Realization r s -> SpinConfiguration s -> [Energy]
 getFieldCoupling r c = map ((fieldCoupling r) . fromJust . (spin c)) (vertices (lattice r))
 
 data Spin s => Replica r s = Replica { realization :: !(Realization r s)
-                                     , configuration :: SpinConfiguration s
+                                     , configuration :: !(SpinConfiguration s)
                                      , energy :: Energy
                                      }
 instance (Spin s) => Show (Replica r s) where
@@ -201,7 +204,44 @@ replica'RBBC r conf = Replica { realization = r
                                                 in ac - be
                                                ) 0 (edges (lattice r)) 
                                              siteenergy = sum $ getFieldCoupling r conf
-                                         in bondenergy + siteenergy
+                                          in bondenergy + siteenergy
                                }
 
+-- | Maps size to frequency of zero clusters
+type ZeroDistribution = IM.IntMap Int
+
+zeroCusterSizes :: RBBCReplica -> ZeroDistribution
+zeroCusterSizes r =
+  let conf = configuration r
+      lat = makeUndirected $
+             filterVertices 
+               (\v -> fromJust (spin conf v) == Zero)
+               $ lattice $ realization r
+      nvs = vertices lat
+      countCluster g dist =
+        let vs = vertices g
+         in case null vs of
+              True -> dist
+              False ->
+                let v = head vs
+                    cluster = bfs g v 
+                    zvs = level cluster
+                    clustersize = IM.size zvs
+                    dist' = case IM.lookup clustersize dist of
+                              Just cs -> 
+                                IM.adjust (\cs -> cs + 1) cs dist
+                              Nothing -> 
+                                IM.insert clustersize 1 dist
+                    g' = filterVertices 
+                         (\v -> case IM.lookup v zvs of
+                                  Just _ -> False
+                                  Nothing -> True)
+                         g
+                 in countCluster g' dist'
+
+   in case null nvs of
+        True
+          -> IM.empty
+        False 
+          -> countCluster lat IM.empty
 

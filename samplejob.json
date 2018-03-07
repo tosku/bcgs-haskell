@@ -1,8 +1,8 @@
-{ "_l" : 64
+{ "_l" : 32
 , "_d"   : 2
 , "_delta": 
   { "rangefrom": 2.00
-  , "rangeto": 2.00
+  , "rangeto": 2.05
   , "rangestep": 0.01
   }
 , "_disorder": 
