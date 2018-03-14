@@ -137,7 +137,7 @@ getGS params =
       then BC.Unimodal
       else BC.Dichotomous
       latt = Lat.graphCubicPBC $ Lat.PBCSquareLattice (l params) (d params)
-      rbbc = BC.RandomBond { BC.bondDisorder = distype (seed params) (r params)
+      rbbc = BC.RandomBond { BC.bondDisorder = distype (seed params) (r params) (delta params)
                            , BC.crystalField = (delta params)
                            }
       real = BC.realization'RBBC rbbc latt

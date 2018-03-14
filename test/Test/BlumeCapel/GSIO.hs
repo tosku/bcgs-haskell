@@ -47,7 +47,7 @@ getGS :: L -> D -> Int -> GroundState
 getGS l d s =
   let latt = graphCubicPBC $ PBCSquareLattice l d
       {-rbbc = RandomBond { bondDisorder = Dichotomous s 0.95-}
-      rbbc = RandomBond { bondDisorder = Unimodal s 1
+      rbbc = RandomBond { bondDisorder = Unimodal s 1 1.987
                         , crystalField = 1.987
                         }
       real = realization'RBBC rbbc latt

@@ -11,7 +11,7 @@
   , "rangestep": 0.1
   }
 , "_disorderType" : "unimodal"
-, "_realizations" : 10
-, "_seedofSeeds" : 1409
+, "_realizations" : 1
+, "_seedofSeeds" : 149
 , "_resultfile"    : "results.json"
 }

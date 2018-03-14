@@ -26,7 +26,7 @@ test1 = do
       l    = 10
       d    = 3
       latt = graphCubicPBC $ PBCSquareLattice l d
-      rbbc = RandomBond { bondDisorder = Dichotomous 901 8.1
+      rbbc = RandomBond { bondDisorder = Dichotomous 901 8.1 1.8
                         , crystalField = 1.8
                         }
       real = realization'RBBC rbbc latt

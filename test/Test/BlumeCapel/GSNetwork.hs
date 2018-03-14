@@ -37,7 +37,7 @@ getGS :: L -> D -> Int -> GroundState
 getGS l d s =
   let latt = graphCubicPBC $ PBCSquareLattice l d
       {-rbbc = RandomBond { bondDisorder = Dichotomous s 0.95-}
-      rbbc = RandomBond { bondDisorder = Unimodal s 1.15
+      rbbc = RandomBond { bondDisorder = Unimodal s 1.15 1.987
                         , crystalField = 1.987
                         }
       real = realization'RBBC rbbc latt
@@ -50,11 +50,11 @@ test1 = do
       l    = 20 :: L
       d    = 3 :: D
       !latt = graphCubicPBC $ PBCSquareLattice l d
-      rbbc = RandomBond { bondDisorder = Unimodal 901 0.3
+      rbbc = RandomBond { bondDisorder = Unimodal 901 0.3 1.8
                         , crystalField = 1.8
                         }
       real = realization'RBBC rbbc latt
-      expe = -9647.56463308038
+      expe = -9681.193769972098
       out = fromRational $ IM.foldr (\w ac -> ac + w) 0 $ weights real :: Double
   case  out == expe of
     True -> testPassed name "passed!"

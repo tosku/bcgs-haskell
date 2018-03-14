@@ -110,34 +110,39 @@ type Js = M.Map Edge J
 data (Spin s) => Field s = Field (IM.IntMap Energy)
   deriving (Show,Eq)
 
-data BondDisorder = Dichotomous Seed DisorderStrength |
-  Unimodal Seed DisorderStrength
+data BondDisorder = Dichotomous Seed DisorderStrength Delta |
+  Unimodal Seed DisorderStrength Delta
   deriving (Show,Eq,GEN.Generic)
 
 getInteractions :: BondDisorder -> [Edge] -> Js
 getInteractions bc es =
   case bc of
-    Dichotomous s d -> dichotomousJs es s d
-    Unimodal s d -> unimodalJs es s d
+    Dichotomous s d δ -> dichotomousJs es s d δ
+    Unimodal s d δ -> unimodalJs es s d δ
 
-dichotomousJs :: [Edge] -> Seed -> DisorderStrength -> Js
-dichotomousJs es s r = do
+dichotomousJs :: [Edge] -> Seed -> DisorderStrength -> Delta -> Js
+dichotomousJs es s r δ = do
   let r' = case (r < 0) || (r > 1) of
            True -> 1
            False -> r
       -- | r=1-(jw/js)
       jWeak = 2 * (1 - r') / (2 - r')
       jStrong = 2 / (2 - r')
+      s' = s 
+        + (fromIntegral $ numerator r) 
+        + (fromIntegral $ numerator δ) -- ^ (s,r,δ) should define the realization
       n = length es
       strongjs = IM.fromList $ zip [1..n] (repeat jStrong)
-      weakindxs = sample (getRNG s :: MTRNG) (quot n 2) [1..n]
+      weakindxs = sample (getRNG s' :: MTRNG) (quot n 2) [1..n]
       js = foldl (\ac i -> IM.insert i jWeak ac) strongjs weakindxs
    in M.fromList $ zip es (map snd $ IM.toList js)
 
-unimodalJs :: [Edge] -> Seed -> DisorderStrength -> Js
-unimodalJs es s r = 
+unimodalJs :: [Edge] -> Seed -> DisorderStrength -> Delta -> Js
+unimodalJs es s r δ = 
   let n = length es
-      newseed = s + (fromIntegral $ numerator r) -- ^ (s,r) pair should define the realization
+      newseed = s 
+        + (fromIntegral $ numerator r) 
+        + (fromIntegral $ numerator δ) -- ^ (s,r,δ) should define the realization
       rng = getRNG newseed :: MTRNG
       μ = 1
       σ = fromRational r
