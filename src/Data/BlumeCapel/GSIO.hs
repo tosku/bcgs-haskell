@@ -7,119 +7,128 @@ Maintainer  : mail@tpapak.com
 Stability   : experimental
 Portability : POSIX
 
-- GSRecord the result container for a single ground state
 
  -}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
+
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports    #-}
 
 module Data.BlumeCapel.GSIO where
 
-import Data.List
-import Data.Maybe
-import Data.Either.Unwrap
-import qualified Data.Vector as V
-import qualified Data.Map as M
-import qualified Data.IntSet as Set
-import qualified Data.IntMap.Strict as IM
+import Data.Monoid
+import           Data.Either.Unwrap
+import qualified Data.IntMap.Strict                           as IM
+import qualified Data.IntSet                                  as Set
+import           Data.List
+import qualified Data.Map                                     as M
+import           Data.Maybe
+import qualified Data.Vector                                  as V
 
+import           Control.Concurrent.ParallelIO.Global
+import           Control.Concurrent.STM
+import qualified Control.Monad.Parallel                       as MPar
+import           Control.Parallel.Strategies
 import           Data.Aeson
 import           Data.Aeson.Encode.Pretty
-import Data.Aeson.Text (encodeToLazyText)
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy.IO as I (appendFile,writeFile)
-import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Text as TXT
-import Data.Text.Encoding
-import           System.Environment
-import qualified Data.ByteString.Lazy  as B
-import qualified Data.ByteString.Char8 as C
-import qualified Data.Bits as Bits
+import           Data.Aeson.Text                              (encodeToLazyText)
+import qualified Data.Bits                                    as Bits
+import qualified Data.ByteString.Char8                        as C
+import qualified Data.ByteString.Lazy                         as B
+import qualified Data.Text                                    as TXT
+import qualified Data.Text.Encoding                           as TEN
+import qualified Data.Text.Lazy                               as TXL
+import           Data.Text.Lazy.IO                            as I (appendFile,
+                                                                    writeFile)
+import qualified Data.Time                                    as Time
 import           GHC.Generics
+import           System.Environment
 import           System.IO
-import           System.Posix
-import           System.Posix.IO.ByteString as BS
-import Control.Parallel.Strategies
-import qualified Control.Monad.Parallel as MPar
-import Control.Concurrent.STM
-import Control.Concurrent.ParallelIO.Global
+import qualified System.Posix                                 as SP
+import qualified System.Posix.Files                           as PF
+import qualified System.Posix.IO                              as PIO
+import           "unix-bytestring" System.Posix.IO.ByteString (fdPread,
+                                                               fdPwrite)
 
-import Data.Graph.AdjacencyList
-import qualified Data.Graph.AdjacencyList.Grid as Lat
-import Data.Graph.AdjacencyList.PushRelabel.Pure
+import           Data.Graph.AdjacencyList
+import qualified Data.Graph.AdjacencyList.Grid                as Lat
+import           Data.Graph.AdjacencyList.PushRelabel.Pure
 
-import qualified Data.BlumeCapel as BC
-import Data.BlumeCapel.GSNetwork
-{-import qualified Data.Graph.PushRelabel.STM as IOPR-}
+import qualified Data.BlumeCapel                              as BC
+import           Data.BlumeCapel.GSNetwork
 
-import Data.PRNG
-import Data.PRNG.MTRNG
+import           Data.PRNG
+import           Data.PRNG.MTRNG
 
 default (Int,Rational,Double)
 
-data ParamRange = ParamRange 
+data ParamRange = ParamRange
   { rangefrom :: Double
-  , rangeto :: Double
+  , rangeto   :: Double
   , rangestep :: Double
   } deriving (Show, Generic)
 instance FromJSON ParamRange
 instance ToJSON ParamRange
 data JobArguments = JobArguments
-  { _l :: Int
-  , _d :: Int
-  , _delta :: ParamRange
-  , _disorder :: ParamRange
+  { _l            :: Int
+  , _d            :: Int
+  , _delta        :: ParamRange
+  , _disorder     :: ParamRange
   , _disorderType :: String
   , _realizations :: Int
-  , _seedofSeeds :: Int
-  , _resultfile    :: String
+  , _seedofSeeds  :: Int
+  , _resultfile   :: String
   } deriving (Show, Generic)
 instance FromJSON JobArguments
 instance ToJSON JobArguments
 
 data Observables = Observables
-  { energy :: Double
+  { energy        :: Double
   , magnetization :: Double
-  , zeroclusters :: BC.ZeroDistribution
-  , configuration :: BC.BCConfiguration
+  , zeroclusters  :: BC.ZeroDistribution
+  {-, configuration :: BC.BCConfiguration-}
   } deriving (Show, Generic)
 {-instance FromJSON Observables-}
 {-instance ToJSON Observables-}
 
 instance ToJSON Observables where
   toJSON obs = object ["energy" .= energy obs
-                      , "mag" .= magnetization obs 
+                      , "mag" .= magnetization obs
                       , "zeroclusters" .= zeroclusters obs
-                      , "configuration" .= encodeConf (configuration obs)]
-encodeConf :: BC.BCConfiguration -> String
-encodeConf (BC.SpinConfiguration conf) = 
-  let intlist = map (\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $
-                      IM.toList conf
-  in foldr (\x ac-> 
-            let c = show x
-             in c ++ ac)
-         "" intlist
+                      {-, "configuration" .= encodeConf (configuration obs)-}
+                      ]
+{-encodeConf :: BC.BCConfiguration -> String-}
+{-encodeConf (BC.SpinConfiguration conf) =-}
+  {-let intlist = map-}
+                {-(\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $-}
+                      {-IM.toList conf-}
+  {-in foldr (\x ac->-}
+            {-let c = show x-}
+             {-in c ++ ac)-}
+         {-"" intlist-}
 
 data GSRecord = GSRecord
-  { linear_size :: !Int
-  , dimensions :: !Int
+  { linear_size       :: !Int
+  , dimensions        :: !Int
   {-, field :: !Rational-}
   {-, disorder_strength :: !Rational-}
-  , field :: !Double
+  , field             :: !Double
   , disorder_strength :: !Double
-  , disorder_type :: !String
-  , realization_id :: !Int
-  , observables :: !Observables
+  , disorder_type     :: !String
+  , realization_id    :: !Int
+  , observables       :: !Observables
   } deriving (Show, Generic)
 instance ToJSON GSRecord
 
 data GSParams = GSParams
-  { l :: Lat.L 
-  , d :: Lat.D 
-  , r :: BC.DisorderStrength 
-  , disorderType :: String 
-  , delta :: BC.Delta 
-  , seed :: Int
+  { l            :: Lat.L
+  , d            :: Lat.D
+  , r            :: BC.DisorderStrength
+  , disorderType :: String
+  , delta        :: BC.Delta
+  , seed         :: Int
   } deriving (Show,Eq,Ord)
 
 getGS :: GSParams -> GroundState
@@ -139,7 +148,7 @@ saveGS args gs =
   let nvs = fromIntegral $ (numVertices $ BC.lattice $ BC.realization $ replica gs)
       en = fromRational $ BC.energy $ replica gs
       mag = (fromRational $ BC.getMagnetization $ BC.configuration $ replica gs) / nvs :: Double
-      conf = BC.configuration $ replica gs
+      {-conf = BC.configuration $ replica gs-}
       zclusters = BC.zeroCusterSizes $ replica gs
       gsrec = GSRecord
                 { linear_size = fromIntegral $ l args
@@ -150,11 +159,11 @@ saveGS args gs =
                 , disorder_strength = fromRational $ r args
                 , disorder_type = disorderType args
                 , realization_id = seed args
-                , observables = Observables 
+                , observables = Observables
                   { energy = en
                   , magnetization = mag
                   , zeroclusters = zclusters
-                  , configuration = conf
+                  {-, configuration = conf-}
                   }
                 }
    in gsrec
@@ -167,9 +176,9 @@ getRange params =
          rend = toRational $ rangeto params
       in [frm,nxt..rend]
 
-argumentsToParameters :: JobArguments 
+argumentsToParameters :: JobArguments
                       -> Either String [GSParams]
-argumentsToParameters args = 
+argumentsToParameters args =
      let size = (fromIntegral $ _l args) :: Lat.L
          dimensions = fromIntegral $ _d args
          distype = _disorderType args
@@ -178,7 +187,7 @@ argumentsToParameters args =
          seeds = randomInts (getRNG $ _seedofSeeds args :: MTRNG) (_realizations args)
       in if not $ elem distype ["unimodal", "dichotomous"]
             then Left "Available bond disorder unimodal, dichotomous"
-            else Right $ map (\(s, (r,d)) -> 
+            else Right $ map (\(s, (r,d)) ->
               GSParams { l = size
                        , d = dimensions
                        , r = r
@@ -187,14 +196,8 @@ argumentsToParameters args =
                        , seed = s
                        }) $ (,) <$> seeds <*> ((,) <$> rs <*> deltas)
 
-type Results = M.Map GSParams GroundState
-
 getJson :: ToJSON a => a -> String
-getJson d = TXT.unpack $ decodeUtf8 $ BSL.toStrict (encodePretty d)
-
-
-gsToJSON :: Results -> [GSRecord]
-gsToJSON gss = map (\(par,gs) -> saveGS par gs) $ M.toList gss
+getJson d = TXT.unpack $ TEN.decodeUtf8 $ B.toStrict (encodePretty d)
 
 runJob :: String -> IO ()
 runJob jobfile = do
@@ -208,33 +211,50 @@ runJob jobfile = do
           putStrLn $ (getJson args)
           let epars = argumentsToParameters args
           case epars of
-            Left err -> 
+            Left err ->
               putStrLn $ "problem with the job file" ++ err
             Right pars -> do
               putStrLn "running"
               putStrLn $ "total: " ++ (show $ length pars)
-              results <- newTVarIO (M.empty :: Results)
-              let file = _resultfile args
-                  updateResults :: GSParams -> GroundState -> STM ()
-                  updateResults par gs = do
-                    res <- readTVar results
-                    let res' = M.insert par gs res
-                    writeTVar results res'
-                  getResults :: IO Results
-                  getResults = do
-                    res <- atomically $ readTVar results
-                    return res
-              parallel_ 
+              currentTime <- Time.getCurrentTime
+              let file = (show currentTime) ++ "_" ++ _resultfile args
+              buffer <- newTVarIO (0,0,0,C.empty) :: IO (TVar (Int, SP.COff, SP.COff, C.ByteString))
+              resfd <- PIO.createFile file PF.ownerModes
+              -- |parameters -> gs -> buffer size -> done
+              let writeResults :: GSParams -> GroundState -> Int -> IO Int
+                  writeResults par gs bufferSize = do
+                    let res = saveGS par gs
+                    !(d,newofs, ofs, b) <- atomically $ do
+                          (done, offset, offsetold, bf) <- readTVar buffer
+                          let !resbyt = TEN.encodeUtf8 
+                                      $ TXL.toStrict 
+                                      $ (encodeToLazyText res) <> TXL.pack "\n" 
+                              !bf' = C.append resbyt bf
+                              !offset' = (fromIntegral $ C.length bf') + offset
+                              !done' = done + 1
+                          if (mod done' bufferSize == 0) || (done' == length pars)
+                             then do
+                               writeTVar buffer (done', offset', offset, C.empty)
+                               return (done', offset', offset, Just bf')
+                             else do
+                               writeTVar buffer (done', offset', offset, bf')
+                               return (done', offset', offset, Nothing)
+                    case b of
+                      Just bf -> do
+                        fdPwrite resfd bf ofs
+                        return ()
+                      Nothing -> return ()
+                    {-putStrLn $ show ofs ++ " " ++ show d-}
+                    return d
+              parallel_
                 $ map (\par -> do
-                    let !gs = getGS par
-                    atomically $ updateResults par gs
-                    pr <- getResults
-                    hFlush stdout
-                    hPutChar stdout '\r' 
-                    hPutStr stdout $ "done " ++ (show $ M.size pr)
-                     ++ " mag: " ++ (show $ getGSMag gs)
-                    hFlush stdout
+                        let !gs = getGS par
+                        pr <- writeResults par gs 10
+                        hFlush stdout
+                        hPutChar stdout '\r'
+                        hPutStr stdout $ "done " ++ (show pr)
+                          ++ " mag: " ++ (show $ getGSMag gs)
+                        hFlush stdout
                       ) pars
-              results <- getResults
-              I.writeFile file (encodeToLazyText (gsToJSON results))
+              return ()
 
