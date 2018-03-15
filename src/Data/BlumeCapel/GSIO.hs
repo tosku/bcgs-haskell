@@ -112,10 +112,10 @@ instance ToJSON Observables where
 data GSRecord = GSRecord
   { linear_size       :: !Int
   , dimensions        :: !Int
-  {-, field :: !Rational-}
-  {-, disorder_strength :: !Rational-}
-  , field             :: !Double
-  , disorder_strength :: !Double
+  , field :: !Rational
+  , disorder_strength :: !Rational
+  {-, field             :: !Double-}
+  {-, disorder_strength :: !Double-}
   , disorder_type     :: !String
   , realization_id    :: !Int
   , observables       :: !Observables
@@ -153,10 +153,10 @@ saveGS args gs =
       gsrec = GSRecord
                 { linear_size = fromIntegral $ l args
                 , dimensions = fromIntegral $ d args
-                {-, field =  delta args-}
-                {-, disorder_strength =  r args-}
-                , field = fromRational $ delta args
-                , disorder_strength = fromRational $ r args
+                , field =  delta args
+                , disorder_strength =  r args
+                {-, field = fromRational $ delta args-}
+                {-, disorder_strength = fromRational $ r args-}
                 , disorder_type = disorderType args
                 , realization_id = seed args
                 , observables = Observables
