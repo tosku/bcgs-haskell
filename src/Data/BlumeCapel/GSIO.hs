@@ -25,12 +25,9 @@ import qualified Data.IntSet                                  as Set
 import           Data.List
 import qualified Data.Map                                     as M
 import           Data.Maybe
-import qualified Data.Vector                                  as V
 
 import           Control.Concurrent.ParallelIO.Global
 import           Control.Concurrent.STM
-import qualified Control.Monad.Parallel                       as MPar
-import           Control.Parallel.Strategies
 import           Data.Aeson
 import           Data.Aeson.Encode.Pretty
 import           Data.Aeson.Text                              (encodeToLazyText)
@@ -88,39 +85,21 @@ data Observables = Observables
   { energy        :: Double
   , magnetization :: Double
   , zeroclusters  :: BC.ZeroDistribution
-  {-, configuration :: BC.BCConfiguration-}
   } deriving (Show, Generic)
-{-instance FromJSON Observables-}
-{-instance ToJSON Observables-}
-
-instance ToJSON Observables where
-  toJSON obs = object ["energy" .= energy obs
-                      , "mag" .= magnetization obs
-                      , "zeroclusters" .= zeroclusters obs
-                      {-, "configuration" .= encodeConf (configuration obs)-}
-                      ]
-{-encodeConf :: BC.BCConfiguration -> String-}
-{-encodeConf (BC.SpinConfiguration conf) =-}
-  {-let intlist = map-}
-                {-(\(k,s) -> floor (fromRational (BC.project BC.referenceSpin s))::Int) $-}
-                      {-IM.toList conf-}
-  {-in foldr (\x ac->-}
-            {-let c = show x-}
-             {-in c ++ ac)-}
-         {-"" intlist-}
+instance FromJSON Observables
+instance ToJSON Observables 
 
 data GSRecord = GSRecord
   { linear_size       :: !Int
   , dimensions        :: !Int
   , field :: !Rational
   , disorder_strength :: !Rational
-  {-, field             :: !Double-}
-  {-, disorder_strength :: !Double-}
   , disorder_type     :: !String
   , realization_id    :: !Int
   , observables       :: !Observables
   } deriving (Show, Generic)
 instance ToJSON GSRecord
+instance FromJSON GSRecord
 
 data GSParams = GSParams
   { l            :: Lat.L
@@ -148,22 +127,18 @@ saveGS args gs =
   let nvs = fromIntegral $ (numVertices $ BC.lattice $ BC.realization $ replica gs)
       en = fromRational $ BC.energy $ replica gs
       mag = (fromRational $ BC.getMagnetization $ BC.configuration $ replica gs) / nvs :: Double
-      {-conf = BC.configuration $ replica gs-}
       zclusters = BC.zeroCusterSizes $ replica gs
       gsrec = GSRecord
                 { linear_size = fromIntegral $ l args
                 , dimensions = fromIntegral $ d args
                 , field =  delta args
                 , disorder_strength =  r args
-                {-, field = fromRational $ delta args-}
-                {-, disorder_strength = fromRational $ r args-}
                 , disorder_type = disorderType args
                 , realization_id = seed args
                 , observables = Observables
                   { energy = en
                   , magnetization = mag
                   , zeroclusters = zclusters
-                  {-, configuration = conf-}
                   }
                 }
    in gsrec
@@ -200,9 +175,9 @@ getJson :: ToJSON a => a -> String
 getJson d = TXT.unpack $ TEN.decodeUtf8 $ B.toStrict (encodePretty d)
 
 runJob :: String -> IO ()
-runJob jobfile = do
-  let getJSON = B.readFile jobfile
-  readParams <- (eitherDecode <$> getJSON) :: IO (Either String JobArguments)
+runJob jobfilename = do
+  let jobfile = B.readFile jobfilename
+  readParams <- (eitherDecode <$> jobfile) :: IO (Either String JobArguments)
   case readParams of
        Left err -> do
            putStrLn $ "problem with the job file" ++ err
@@ -220,9 +195,8 @@ runJob jobfile = do
               let file = (show currentTime) ++ "_" ++ _resultfile args
               buffer <- newTVarIO (0,0,0,C.empty) :: IO (TVar (Int, SP.COff, SP.COff, C.ByteString))
               resfd <- PIO.createFile file PF.ownerModes
-              -- |parameters -> gs -> buffer size -> done
-              let writeResults :: GSParams -> GroundState -> Int -> IO Int
-                  writeResults par gs bufferSize = do
+              let writeResults :: GSParams -> GroundState -> IO Int
+                  writeResults par gs = do
                     let res = saveGS par gs
                     !(d,newofs, ofs, b) <- atomically $ do
                           (done, offset, offsetold, bf) <- readTVar buffer
@@ -232,24 +206,14 @@ runJob jobfile = do
                               !bf' = C.append resbyt bf
                               !offset' = (fromIntegral $ C.length bf') + offset
                               !done' = done + 1
-                          if (mod done' bufferSize == 0) || (done' == length pars)
-                             then do
-                               writeTVar buffer (done', offset', offset, C.empty)
-                               return (done', offset', offset, Just bf')
-                             else do
-                               writeTVar buffer (done', offset', offset, bf')
-                               return (done', offset', offset, Nothing)
-                    case b of
-                      Just bf -> do
-                        fdPwrite resfd bf ofs
-                        return ()
-                      Nothing -> return ()
-                    {-putStrLn $ show ofs ++ " " ++ show d-}
+                          writeTVar buffer (done', offset', offset, C.empty)
+                          return (done', offset', offset, bf')
+                    fdPwrite resfd b ofs
                     return d
               parallel_
                 $ map (\par -> do
                         let !gs = getGS par
-                        pr <- writeResults par gs 10
+                        pr <- writeResults par gs
                         hFlush stdout
                         hPutChar stdout '\r'
                         hPutStr stdout $ "done " ++ (show pr)
@@ -257,4 +221,11 @@ runJob jobfile = do
                         hFlush stdout
                       ) pars
               return ()
+
+readResults :: String -> IO (Either String [GSRecord])
+readResults resultsfilename = do
+  let resultsfile = B.readFile resultsfilename
+  readLines <- (eitherDecode <$> resultsfile) :: IO (Either String [GSRecord])
+  putStrLn $ show readLines
+  return readLines
 

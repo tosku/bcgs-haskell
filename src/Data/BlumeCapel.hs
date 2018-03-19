@@ -58,7 +58,6 @@ import Data.List
 import Data.Maybe
 import Data.Either
 import Data.Ratio
-import qualified Data.Vector as V
 import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IM
 

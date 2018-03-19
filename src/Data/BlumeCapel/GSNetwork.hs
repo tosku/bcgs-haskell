@@ -32,7 +32,6 @@ import Data.List
 import Data.Maybe
 import Data.Either.Unwrap
 import qualified Data.Map.Lazy as M
-import qualified Data.Vector as V
 import qualified Data.IntMap.Lazy as IM
 
 import Data.BlumeCapel
