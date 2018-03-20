@@ -28,12 +28,13 @@ import           Data.Maybe
 
 import           Control.Concurrent.ParallelIO.Global
 import           Control.Concurrent.STM
-import           Data.Aeson
+import qualified Data.Aeson as AE
 import           Data.Aeson.Encode.Pretty
 import           Data.Aeson.Text                              (encodeToLazyText)
 import qualified Data.Bits                                    as Bits
 import qualified Data.ByteString.Char8                        as C
 import qualified Data.ByteString.Lazy                         as B
+import qualified Codec.Binary.UTF8.String as CU
 import qualified Data.Text                                    as TXT
 import qualified Data.Text.Encoding                           as TEN
 import qualified Data.Text.Lazy                               as TXL
@@ -66,8 +67,8 @@ data ParamRange = ParamRange
   , rangeto   :: Double
   , rangestep :: Double
   } deriving (Show, Generic)
-instance FromJSON ParamRange
-instance ToJSON ParamRange
+instance AE.FromJSON ParamRange
+instance AE.ToJSON ParamRange
 data JobArguments = JobArguments
   { _l            :: Int
   , _d            :: Int
@@ -78,16 +79,16 @@ data JobArguments = JobArguments
   , _seedofSeeds  :: Int
   , _resultfile   :: String
   } deriving (Show, Generic)
-instance FromJSON JobArguments
-instance ToJSON JobArguments
+instance AE.FromJSON JobArguments
+instance AE.ToJSON JobArguments
 
 data Observables = Observables
   { energy        :: Double
   , magnetization :: Double
   , zeroclusters  :: BC.ZeroDistribution
   } deriving (Show, Generic)
-instance FromJSON Observables
-instance ToJSON Observables 
+instance AE.FromJSON Observables
+instance AE.ToJSON Observables 
 
 data GSRecord = GSRecord
   { linear_size       :: !Int
@@ -98,8 +99,8 @@ data GSRecord = GSRecord
   , realization_id    :: !Int
   , observables       :: !Observables
   } deriving (Show, Generic)
-instance ToJSON GSRecord
-instance FromJSON GSRecord
+instance AE.ToJSON GSRecord
+instance AE.FromJSON GSRecord
 
 data GSParams = GSParams
   { l            :: Lat.L
@@ -171,13 +172,13 @@ argumentsToParameters args =
                        , seed = s
                        }) $ (,) <$> seeds <*> ((,) <$> rs <*> deltas)
 
-getJson :: ToJSON a => a -> String
+getJson :: AE.ToJSON a => a -> String
 getJson d = TXT.unpack $ TEN.decodeUtf8 $ B.toStrict (encodePretty d)
 
 runJob :: String -> IO ()
 runJob jobfilename = do
   let jobfile = B.readFile jobfilename
-  readParams <- (eitherDecode <$> jobfile) :: IO (Either String JobArguments)
+  readParams <- (AE.eitherDecode <$> jobfile) :: IO (Either String JobArguments)
   case readParams of
        Left err -> do
            putStrLn $ "problem with the job file" ++ err
@@ -193,7 +194,8 @@ runJob jobfilename = do
               putStrLn $ "total: " ++ (show $ length pars)
               currentTime <- Time.getCurrentTime
               let file = (show currentTime) ++ "_" ++ _resultfile args
-              buffer <- newTVarIO (0,0,0,C.empty) :: IO (TVar (Int, SP.COff, SP.COff, C.ByteString))
+              buffer <- newTVarIO (0,0,0,C.empty) 
+                :: IO (TVar (Int, SP.COff, SP.COff, C.ByteString))
               resfd <- PIO.createFile file PF.ownerModes
               let writeResults :: GSParams -> GroundState -> IO Int
                   writeResults par gs = do
@@ -224,8 +226,20 @@ runJob jobfilename = do
 
 readResults :: String -> IO (Either String [GSRecord])
 readResults resultsfilename = do
-  let resultsfile = B.readFile resultsfilename
-  readLines <- (eitherDecode <$> resultsfile) :: IO (Either String [GSRecord])
-  putStrLn $ show readLines
-  return readLines
-
+  inh <- openFile resultsfilename ReadMode
+  reslines <- readlines inh []
+  hClose inh
+  let results = foldr (\x ac -> fmap (:) x <*> ac) (Right [])
+              $ map (AE.eitherDecode . B.pack . CU.encode) reslines
+  putStrLn $ show results
+  return results
+  where 
+    readlines :: Handle -> [String] -> IO [String]
+    readlines inh res = do 
+      ineof <- hIsEOF inh
+      if ineof
+        then return res
+        else do
+          inpStr <- hGetLine inh
+          let res' = inpStr : res
+          readlines inh res'
