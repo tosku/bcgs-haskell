@@ -1,9 +1,9 @@
-{ "_l" : 32
+{ "_l" : 12
 , "_d"   : 2
 , "_delta": 
-  { "rangefrom": 2.00
-  , "rangeto": 2.00
-  , "rangestep": 0.01
+  { "rangefrom": 1.9
+  , "rangeto": 2.1
+  , "rangestep": 0.1
   }
 , "_disorder": 
   { "rangefrom": 0.5
@@ -11,7 +11,7 @@
   , "rangestep": 0.1
   }
 , "_disorderType" : "unimodal"
-, "_realizations" : 100
+, "_realizations" : 1000
 , "_seedofSeeds" : 149
 , "_resultfile"    : "results.json"
 }

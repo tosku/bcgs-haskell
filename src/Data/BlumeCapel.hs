@@ -11,14 +11,14 @@ Portability : POSIX
 - get Ennergy of lattice
 - get Magnetization of lattice
 
-|-}
+ -}
 
- {-# LANGUAGE MultiParamTypeClasses #-}
- {-# LANGUAGE FunctionalDependencies #-}
- {-# LANGUAGE FlexibleInstances #-}
- {-# LANGUAGE Rank2Types #-}
- {-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
- {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE BangPatterns #-}
 
 
 module Data.BlumeCapel
@@ -34,7 +34,7 @@ module Data.BlumeCapel
     , fromTuple
     , BondDisorder (..)
     , DisorderStrength
-    , Delta -- ^ Crysta field strength Double
+    , Delta -- ^ Crystal field strength Double
     , SpinOne (..)
     , Spin (..)
     , RBBC (..) -- ^ Random Bond Blume Capel

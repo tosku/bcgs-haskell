@@ -1,13 +1,16 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
-import Data.List
+import           Data.List
+import Data.Either
 
 import           System.Environment
 
 import qualified Data.BlumeCapel.GSIO as GSIO
+import qualified Data.BlumeCapel.Statistics as ST
 
 
 main :: IO Int
@@ -20,7 +23,15 @@ main = do
     False -> do
       putStrLn "Reading results file \n"
       let resultsfile = args !! 0
-      GSIO.readResults resultsfile
-      putStrLn "\n"
+      let outjson = case length args < 2 of
+                      True -> "means.json"
+                      False -> args !! 1
+      egss <- GSIO.readResults resultsfile
+      case egss of
+        Left err -> putStrLn $ show err
+        Right gss -> do
+          let stats = ST.sumRecords gss
+          ST.printStats stats outjson
+      putStrLn $ "printed summed json in " ++ outjson ++ "\n"
       putStrLn "The End!"
-      return 0 
+      return 0

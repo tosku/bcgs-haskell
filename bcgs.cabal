@@ -84,6 +84,7 @@ executable gs-analytics
   other-modules:       Data.BlumeCapel
                      , Data.BlumeCapel.GSNetwork
                      , Data.BlumeCapel.GSIO
+                     , Data.BlumeCapel.Statistics
   build-depends:       base >= 4.7 && < 5
                      , bcgs
                      , stm >= 2.4.4.1

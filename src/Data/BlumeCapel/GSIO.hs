@@ -18,23 +18,23 @@ Portability : POSIX
 
 module Data.BlumeCapel.GSIO where
 
-import Data.Monoid
 import           Data.Either.Unwrap
 import qualified Data.IntMap.Strict                           as IM
 import qualified Data.IntSet                                  as Set
 import           Data.List
 import qualified Data.Map                                     as M
 import           Data.Maybe
+import           Data.Monoid
 
+import qualified Codec.Binary.UTF8.String                     as CU
 import           Control.Concurrent.ParallelIO.Global
 import           Control.Concurrent.STM
-import qualified Data.Aeson as AE
-import           Data.Aeson.Encode.Pretty
+import qualified Data.Aeson                                   as AE
+import           Data.Aeson.Encode.Pretty                     (encodePretty)
 import           Data.Aeson.Text                              (encodeToLazyText)
 import qualified Data.Bits                                    as Bits
 import qualified Data.ByteString.Char8                        as C
 import qualified Data.ByteString.Lazy                         as B
-import qualified Codec.Binary.UTF8.String as CU
 import qualified Data.Text                                    as TXT
 import qualified Data.Text.Encoding                           as TEN
 import qualified Data.Text.Lazy                               as TXL
@@ -88,12 +88,12 @@ data Observables = Observables
   , zeroclusters  :: BC.ZeroDistribution
   } deriving (Show, Generic)
 instance AE.FromJSON Observables
-instance AE.ToJSON Observables 
+instance AE.ToJSON Observables
 
 data GSRecord = GSRecord
   { linear_size       :: !Int
   , dimensions        :: !Int
-  , field :: !Rational
+  , field             :: !Rational
   , disorder_strength :: !Rational
   , disorder_type     :: !String
   , realization_id    :: !Int
@@ -117,16 +117,17 @@ getGS params =
       then BC.Unimodal
       else BC.Dichotomous
       latt = Lat.graphCubicPBC $ Lat.PBCSquareLattice (l params) (d params)
-      rbbc = BC.RandomBond { BC.bondDisorder = distype (seed params) (r params) (delta params)
-                           , BC.crystalField = (delta params)
-                           }
+      rbbc = BC.RandomBond
+           { BC.bondDisorder = distype (seed params) (r params) (delta params)
+           , BC.crystalField = (delta params)
+           }
       real = BC.realization'RBBC rbbc latt
    in groundState real
 
 saveGS :: GSParams -> GroundState -> GSRecord
 saveGS args gs =
   let nvs = fromIntegral $ (numVertices $ BC.lattice $ BC.realization $ replica gs)
-      en = fromRational $ BC.energy $ replica gs
+      en = (fromRational $ BC.energy $ replica gs) / nvs :: Double
       mag = (fromRational $ BC.getMagnetization $ BC.configuration $ replica gs) / nvs :: Double
       zclusters = BC.zeroCusterSizes $ replica gs
       gsrec = GSRecord
@@ -194,7 +195,7 @@ runJob jobfilename = do
               putStrLn $ "total: " ++ (show $ length pars)
               currentTime <- Time.getCurrentTime
               let file = (show currentTime) ++ "_" ++ _resultfile args
-              buffer <- newTVarIO (0,0,0,C.empty) 
+              buffer <- newTVarIO (0,0,0,C.empty)
                 :: IO (TVar (Int, SP.COff, SP.COff, C.ByteString))
               resfd <- PIO.createFile file PF.ownerModes
               let writeResults :: GSParams -> GroundState -> IO Int
@@ -202,9 +203,9 @@ runJob jobfilename = do
                     let res = saveGS par gs
                     !(d,newofs, ofs, b) <- atomically $ do
                           (done, offset, offsetold, bf) <- readTVar buffer
-                          let !resbyt = TEN.encodeUtf8 
-                                      $ TXL.toStrict 
-                                      $ (encodeToLazyText res) <> TXL.pack "\n" 
+                          let !resbyt = TEN.encodeUtf8
+                                      $ TXL.toStrict
+                                      $ (encodeToLazyText res) <> TXL.pack "\n"
                               !bf' = C.append resbyt bf
                               !offset' = (fromIntegral $ C.length bf') + offset
                               !done' = done + 1
@@ -231,11 +232,10 @@ readResults resultsfilename = do
   hClose inh
   let results = foldr (\x ac -> fmap (:) x <*> ac) (Right [])
               $ map (AE.eitherDecode . B.pack . CU.encode) reslines
-  putStrLn $ show results
   return results
-  where 
+  where
     readlines :: Handle -> [String] -> IO [String]
-    readlines inh res = do 
+    readlines inh res = do
       ineof <- hIsEOF inh
       if ineof
         then return res
