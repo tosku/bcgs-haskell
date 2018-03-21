@@ -4,12 +4,12 @@
 
 module Main where
 
+import           Data.Either
 import           Data.List
-import Data.Either
 
 import           System.Environment
 
-import qualified Data.BlumeCapel.GSIO as GSIO
+import qualified Data.BlumeCapel.GSIO       as GSIO
 import qualified Data.BlumeCapel.Statistics as ST
 
 

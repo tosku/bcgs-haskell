@@ -10,18 +10,14 @@ Portability : POSIX
 
  -}
 
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE OverloadedLists       #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 
 module Data.BlumeCapel.Statistics
@@ -34,15 +30,14 @@ module Data.BlumeCapel.Statistics
 
 import qualified Data.Aeson               as AE
 import           Data.Aeson.Encode.Pretty (encodePretty)
-import qualified Data.Text                                    as TXT
+import           Data.Aeson.Text          (encodeToLazyText)
+import qualified Data.ByteString.Lazy     as B
+import qualified Data.Text                as TXT
+import qualified Data.Text                as TXT
+import qualified Data.Text.Encoding       as TEN
+import qualified Data.Text.Lazy           as TXL
+import           Data.Text.Lazy.IO        as I (appendFile, writeFile)
 import qualified GHC.Generics             as GEN
-import qualified Data.ByteString.Lazy                         as B
-import           Data.Aeson.Text                              (encodeToLazyText)
-import           Data.Text.Lazy.IO                            as I (appendFile,
-                                                                    writeFile)
-import qualified Data.Text                                    as TXT
-import qualified Data.Text.Encoding                           as TEN
-import qualified Data.Text.Lazy                               as TXL
 
 import           Data.Either
 import qualified Data.IntMap.Strict       as IM
@@ -51,8 +46,8 @@ import qualified Data.Map.Strict          as M
 import           Data.Maybe
 import           Data.Ratio
 
-import qualified Language.R.Instance as R
-import qualified Language.R.QQ as HR
+import qualified Language.R.Instance      as R
+import qualified Language.R.QQ            as HR
 
 import qualified Data.BlumeCapel          as BC
 import qualified Data.BlumeCapel.GSIO     as GSIO
@@ -132,7 +127,7 @@ sumRecords gss = foldr
 
 printStats :: GSStats -> String -> IO ()
 printStats stats outfile = do
-  I.writeFile outfile 
+  I.writeFile outfile
     $ encodeToLazyText stats
   putStrLn $ "printed summed json in " ++ outfile ++ "\n"
 

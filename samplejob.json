@@ -1,8 +1,8 @@
-{ "_l" : 12
+{ "_l" : 200
 , "_d"   : 2
 , "_delta": 
-  { "rangefrom": 1.9
-  , "rangeto": 2.1
+  { "rangefrom": 2.0
+  , "rangeto": 2.0
   , "rangestep": 0.1
   }
 , "_disorder": 
@@ -10,8 +10,8 @@
   , "rangeto": 0.5
   , "rangestep": 0.1
   }
-, "_disorderType" : "unimodal"
-, "_realizations" : 1000
+, "_disorderType" : "dichotomous"
+, "_realizations" : 1
 , "_seedofSeeds" : 149
 , "_resultfile"    : "results.json"
 }
