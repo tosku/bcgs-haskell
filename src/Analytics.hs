@@ -23,15 +23,11 @@ main = do
     False -> do
       putStrLn "Reading results file \n"
       let resultsfile = args !! 0
-      let outjson = case length args < 2 of
-                      True -> "means.json"
-                      False -> args !! 1
       egss <- GSIO.readResults resultsfile
       case egss of
         Left err -> putStrLn $ show err
         Right gss -> do
           let stats = ST.sumRecords gss
-          ST.printStats stats outjson
-      putStrLn $ "printed summed json in " ++ outjson ++ "\n"
+          ST.gsmeans stats
       putStrLn "The End!"
       return 0

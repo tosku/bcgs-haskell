@@ -20,7 +20,6 @@ Portability : POSIX
 {-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
 {-# LANGUAGE BangPatterns #-}
 
-
 module Data.BlumeCapel
     ( Graph (..)
     , Edge (..)
@@ -90,7 +89,8 @@ instance Spin SpinOne where
     | a == Down && b == Up = -1
     | otherwise = 0
 
-newtype Spin s => SpinConfiguration s = SpinConfiguration (IM.IntMap s)
+-- | s is of class Spin
+newtype SpinConfiguration s = SpinConfiguration (IM.IntMap s)
   deriving (Show,Eq)
 
 spin :: Spin s => SpinConfiguration s -> Vertex -> Maybe s
@@ -106,7 +106,8 @@ type Delta = Rational
 type DisorderStrength = Rational -- ^ Should be between [0,1]
 type J = Energy -- ^ Exchange interaction strength
 type Js = M.Map Edge J
-data (Spin s) => Field s = Field (IM.IntMap Energy)
+-- | s is of class Spin
+data Field s = Field (IM.IntMap Energy)
   deriving (Show,Eq)
 
 data BondDisorder = Dichotomous Seed DisorderStrength Delta |
@@ -150,7 +151,8 @@ unimodalJs es s r δ =
       !js = IM.fromList $ zip [1..] (map toRational (truncatedNormalSample rng μ σ f t n))
    in M.fromList $ zip es (map snd $ IM.toList js)
 
-data Spin s => Realization r s = Realization { lattice :: !Graph
+-- | s is of class Spin
+data Realization r s = Realization { lattice :: !Graph
                                              , interactions :: !Js
                                              , fieldCoupling :: s -> Energy
                                              }
@@ -165,7 +167,8 @@ instance Spin s => Eq (Realization r s) where
 getFieldCoupling :: Spin s => Realization r s -> SpinConfiguration s -> [Energy]
 getFieldCoupling r c = map ((fieldCoupling r) . fromJust . (spin c)) (vertices (lattice r))
 
-data Spin s => Replica r s = Replica { realization :: !(Realization r s)
+-- | s is of class Spin
+data Replica r s = Replica { realization :: !(Realization r s)
                                      , configuration :: !(SpinConfiguration s)
                                      , energy :: Energy
                                      }

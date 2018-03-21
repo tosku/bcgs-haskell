@@ -12,12 +12,24 @@ Portability : POSIX
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE OverloadedLists       #-}
+{-# LANGUAGE QuasiQuotes           #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE ViewPatterns          #-}
+
 
 module Data.BlumeCapel.Statistics
   ( GSStats (..)
   , ObservableCollection (..)
   , sumRecords
   , printStats
+  , gsmeans
   ) where
 
 import qualified Data.Aeson               as AE
@@ -32,14 +44,18 @@ import qualified Data.Text                                    as TXT
 import qualified Data.Text.Encoding                           as TEN
 import qualified Data.Text.Lazy                               as TXL
 
-import qualified Data.BlumeCapel          as BC
-import qualified Data.BlumeCapel.GSIO     as GSIO
 import           Data.Either
 import qualified Data.IntMap.Strict       as IM
 import           Data.List
 import qualified Data.Map.Strict          as M
 import           Data.Maybe
 import           Data.Ratio
+
+import qualified Language.R.Instance as R
+import qualified Language.R.QQ as HR
+
+import qualified Data.BlumeCapel          as BC
+import qualified Data.BlumeCapel.GSIO     as GSIO
 
 data GSParams = GSParams
   { linear_size       :: !Int
@@ -53,10 +69,11 @@ instance AE.ToJSONKey GSParams
 instance AE.ToJSON GSParams where
   toJSON pars =
     let fld = fromRational (field pars) :: Double
+        dis = fromRational (disorder_strength pars) :: Double
      in AE.object [ "linear_size" AE..= linear_size pars
                   , "dimensions" AE..= dimensions pars
                   , "field" AE..= fld
-                  , "disorder" AE..= (disorder_strength pars)
+                  , "disorder" AE..= dis
                   , "disorder_type" AE..= disorder_type pars
                   ]
 
@@ -117,3 +134,35 @@ printStats :: GSStats -> String -> IO ()
 printStats stats outfile = do
   I.writeFile outfile 
     $ encodeToLazyText stats
+  putStrLn $ "printed summed json in " ++ outfile ++ "\n"
+
+rparse :: AE.ToJSON a => a -> String
+rparse = TXT.unpack . TXL.toStrict . encodeToLazyText
+
+gsmeans :: GSStats -> IO ()
+gsmeans stats = do
+  let numberofpoints = M.size stats
+      label = mconcat $ map encodeToLazyText (M.keys stats)
+      xs = rparse (map (fromRational . field) $ M.keys stats :: [Double])
+      mags = rparse (map (magnetizations . snd) $ M.toList stats :: [[Double]])
+  R.withEmbeddedR R.defaultConfig $ do
+    R.runRegion $ do
+      [HR.r| require(ggplot2)
+             require(rjson)
+             mags = fromJSON(mags_hs)
+             xs = fromJSON(xs_hs)
+             magslist = lapply(mags, function(x){
+                 return(mean_se(x))
+             })
+             magmeans = unlist(lapply(magslist,function(x){return(x$y)}))
+             maglows = unlist(lapply(magslist,function(x){return(x$ymin)}))
+             maghighs = unlist(lapply(magslist,function(x){return(x$ymax)}))
+             fvm = data.frame(xs,magmeans,maglows,maghighs)
+             print(magslist)
+             print(fvm)
+             magplot = ggplot(fvm,aes(x=xs,y=magmeans)) +
+             geom_point() +
+             geom_errorbar(aes(ymin=maglows, ymax=maghighs),width=.001)
+             ggsave(filename="fieldvsmags.svg",plot=magplot)
+        |]
+      return ()

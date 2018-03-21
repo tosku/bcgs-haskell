@@ -16,7 +16,18 @@ Portability : POSIX
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports    #-}
 
-module Data.BlumeCapel.GSIO where
+module Data.BlumeCapel.GSIO
+  ( JobArguments (..)
+  , GSRecord (..)
+  , Observables (..)
+  , GSParams (..)
+  , getGS
+  , runJob
+  , saveGS
+  , getJson
+  , argumentsToParameters
+  , readResults
+  ) where
 
 import           Data.Either.Unwrap
 import qualified Data.IntMap.Strict                           as IM
