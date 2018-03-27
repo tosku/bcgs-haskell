@@ -37,7 +37,6 @@ import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Monoid
 
-import qualified Codec.Binary.UTF8.String                     as CU
 import           Control.Concurrent.ParallelIO.Global
 import           Control.Concurrent.STM
 import qualified Data.Aeson                                   as AE
@@ -46,6 +45,7 @@ import           Data.Aeson.Text                              (encodeToLazyText)
 import qualified Data.Bits                                    as Bits
 import qualified Data.ByteString.Char8                        as C
 import qualified Data.ByteString.Lazy                         as B
+import qualified Data.ByteString.Lazy.Char8                   as BCL
 import qualified Data.Text                                    as TXT
 import qualified Data.Text.Encoding                           as TEN
 import qualified Data.Text.Lazy                               as TXL
@@ -236,21 +236,7 @@ runJob jobfilename = do
                       ) pars
               return ()
 
-readResults :: String -> IO (Either String [GSRecord])
+readResults :: String -> IO ([Either String GSRecord])
 readResults resultsfilename = do
-  inh <- openFile resultsfilename ReadMode
-  reslines <- readlines inh []
-  hClose inh
-  let results = foldr (\x ac -> fmap (:) x <*> ac) (Right [])
-              $ map (AE.eitherDecode . B.pack . CU.encode) reslines
-  return results
-  where
-    readlines :: Handle -> [String] -> IO [String]
-    readlines inh res = do
-      ineof <- hIsEOF inh
-      if ineof
-        then return res
-        else do
-          inpStr <- hGetLine inh
-          let res' = inpStr : res
-          readlines inh res'
+  bytes <- BCL.readFile resultsfilename
+  return $ fmap AE.eitherDecode $ BCL.lines bytes

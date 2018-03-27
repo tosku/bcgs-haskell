@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -23,11 +24,9 @@ main = do
     False -> do
       putStrLn "Reading results file \n"
       let resultsfile = args !! 0
-      egss <- GSIO.readResults resultsfile
-      case egss of
-        Left err -> putStrLn $ show err
-        Right gss -> do
-          let stats = ST.sumRecords gss
-          ST.gsmeans stats
+      gss <- GSIO.readResults resultsfile
+      let stats = ST.gsStats gss
+      putStrLn $ show stats
+      putStrLn $ show $ ST.size stats
       putStrLn "The End!"
       return 0

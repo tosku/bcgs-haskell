@@ -22,10 +22,8 @@ Portability : POSIX
 
 module Data.BlumeCapel.Statistics
   ( GSStats (..)
-  , ObservableCollection (..)
-  , sumRecords
-  , printStats
-  , gsmeans
+  , gsStats
+  , size
   ) where
 
 import qualified Data.Aeson               as AE
@@ -39,6 +37,9 @@ import qualified Data.Text.Lazy           as TXL
 import           Data.Text.Lazy.IO        as I (appendFile, writeFile)
 import qualified GHC.Generics             as GEN
 
+import           Control.Applicative
+import           Data.Monoid
+import qualified Control.Foldl            as Fold
 import           Data.Either
 import qualified Data.IntMap.Strict       as IM
 import           Data.List
@@ -60,6 +61,7 @@ data GSParams = GSParams
   , disorder_type     :: !String
   } deriving (Show, Ord, Eq, GEN.Generic)
 instance AE.FromJSON GSParams
+instance AE.FromJSONKey GSParams
 instance AE.ToJSONKey GSParams
 instance AE.ToJSON GSParams where
   toJSON pars =
@@ -72,25 +74,8 @@ instance AE.ToJSON GSParams where
                   , "disorder_type" AE..= disorder_type pars
                   ]
 
-data ObservableCollection = ObservableCollection
-  { energies       :: [Double]
-  , magnetizations :: [Double]
-  , zeroclusters   :: [BC.ZeroDistribution]
-  } deriving (Show, GEN.Generic)
-instance AE.FromJSON ObservableCollection
-instance AE.ToJSON ObservableCollection
-
-emptyCollection :: ObservableCollection
-emptyCollection = ObservableCollection
-  { energies = []
-  , magnetizations = []
-  , zeroclusters = []
-  }
-
-type GSStats = M.Map GSParams ObservableCollection
-
-recordParameters :: GSIO.GSRecord -> GSParams
-recordParameters gr = GSParams
+recordsParameters :: GSIO.GSRecord -> GSParams
+recordsParameters gr = GSParams
   { linear_size = GSIO.linear_size gr
   , dimensions = GSIO.dimensions gr
   , field = GSIO.field gr
@@ -98,66 +83,53 @@ recordParameters gr = GSParams
   , disorder_type = GSIO.disorder_type gr
   }
 
-updateCollection
-  :: GSIO.GSRecord
-  -> ObservableCollection
-  -> ObservableCollection
-updateCollection gr col =
-  let obs = GSIO.observables gr
-      en = GSIO.energy obs
-      mag = GSIO.magnetization obs
-      zrs = GSIO.zeroclusters obs
-   in ObservableCollection { energies = en : (energies col)
-                           , magnetizations = mag : (magnetizations col)
-                           , zeroclusters = zrs : (zeroclusters col)
-                           }
+recordsObservables :: GSIO.GSRecord -> Observables
+recordsObservables gr = Observables
+  { magnetization = GSIO.magnetization $ GSIO.observables gr
+  }
 
-updateStats :: GSIO.GSRecord -> GSStats -> GSStats
-updateStats gr stats =
-  let params = recordParameters gr
-      oldobs = case M.lookup params stats of
-                  Nothing  -> emptyCollection
-                  Just obs -> obs
-   in M.insert params (updateCollection gr oldobs) stats
+-- | Mean and standard error
+data Averaged = Averaged
+  { mean   :: Double
+  , stdErr :: Double
+  } deriving (Show, Eq, GEN.Generic)
+instance AE.FromJSON Averaged
+instance AE.ToJSON Averaged
 
-sumRecords :: [GSIO.GSRecord] -> GSStats
-sumRecords gss = foldr
-  (\x ac -> updateStats x ac)
-  M.empty gss
+data Observables = Observables
+  { magnetization :: Double
+  } deriving (Show, Eq, GEN.Generic)
+instance AE.FromJSON Observables
+instance AE.ToJSON Observables
 
-printStats :: GSStats -> String -> IO ()
-printStats stats outfile = do
-  I.writeFile outfile
-    $ encodeToLazyText stats
-  putStrLn $ "printed summed json in " ++ outfile ++ "\n"
+-- | Aggregates observables
+newtype GSStats = GSStats (M.Map GSParams Observables)
+  deriving (Show, Eq, GEN.Generic)
+instance AE.FromJSON GSStats
+instance AE.ToJSON GSStats
+instance AE.ToJSONKey GSStats
 
-rparse :: AE.ToJSON a => a -> String
-rparse = TXT.unpack . TXL.toStrict . encodeToLazyText
+instance Monoid GSStats where
+  mempty = GSStats M.empty
+  mappend (GSStats l) (GSStats r) = GSStats $
+    M.unionWith (\ ol or ->
+    Observables { magnetization = (magnetization ol + magnetization or)})
+    l r
 
-gsmeans :: GSStats -> IO ()
-gsmeans stats = do
-  let numberofpoints = M.size stats
-      label = mconcat $ map encodeToLazyText (M.keys stats)
-      xs = rparse (map (fromRational . field) $ M.keys stats :: [Double])
-      mags = rparse (map (magnetizations . snd) $ M.toList stats :: [[Double]])
-  R.withEmbeddedR R.defaultConfig $ do
-    R.runRegion $ do
-      [HR.r| require(ggplot2)
-             require(rjson)
-             mags = fromJSON(mags_hs)
-             xs = fromJSON(xs_hs)
-             magslist = lapply(mags, function(x){
-                 return(mean_se(x))
-             })
-             magmeans = unlist(lapply(magslist,function(x){return(x$y)}))
-             maglows = unlist(lapply(magslist,function(x){return(x$ymin)}))
-             maghighs = unlist(lapply(magslist,function(x){return(x$ymax)}))
-             fvm = data.frame(xs,magmeans,maglows,maghighs)
-             print(magslist)
-             print(fvm)
-             magplot = ggplot(fvm,aes(x=xs,y=magmeans)) +
-             geom_point() +
-             geom_errorbar(aes(ymin=maglows, ymax=maghighs),width=.001)
-             ggsave(filename="fieldvsmags.svg",plot=magplot)
-        |]
-      return ()
+accumulateRecords :: Fold.Fold (Either String GSIO.GSRecord) GSStats
+accumulateRecords = Fold.Fold step begin id
+  where 
+    begin = GSStats M.empty
+    step l erc = 
+      case erc of
+        Left _ -> l
+        Right rc ->
+          let nst = 
+                GSStats (M.singleton (recordsParameters rc) (recordsObservables rc))
+           in l <> nst
+
+gsStats :: [Either String GSIO.GSRecord] -> GSStats
+gsStats = Fold.fold accumulateRecords
+
+size :: GSStats -> !Int
+size (GSStats s) = M.size s

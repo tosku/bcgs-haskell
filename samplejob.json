@@ -1,4 +1,4 @@
-{ "_l" : 200
+{ "_l" : 32
 , "_d"   : 2
 , "_delta": 
   { "rangefrom": 2.0
@@ -10,7 +10,7 @@
   , "rangeto": 0.5
   , "rangestep": 0.1
   }
-, "_disorderType" : "dichotomous"
+, "_disorderType" : "unimodal"
 , "_realizations" : 1
 , "_seedofSeeds" : 149
 , "_resultfile"    : "results.json"
