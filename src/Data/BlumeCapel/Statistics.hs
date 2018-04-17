@@ -46,6 +46,7 @@ import qualified Control.Foldl            as Fold
 import Data.Either.Unwrap (fromRight)
 import qualified Data.IntMap.Strict       as IM
 import           Data.List
+import           Data.List.Split
 import qualified Data.Map.Strict          as M
 import           Data.Maybe
 import           Data.Monoid
@@ -144,6 +145,9 @@ data ACC = ACC { mag  :: Variance Double
                , mag4 :: Variance Double
                , bcum :: Covariance Double
                , zcl2 :: Variance Double
+               , zcl224 :: Variance Double
+  , covl2l224 :: Covariance Double
+               , nl2 :: Variance Double
                , ener :: Variance Double
                }
   deriving (Show, Eq, GEN.Generic)
@@ -153,6 +157,9 @@ instance Monoid ACC where
                , mag4 = Variance 0 0 0
                , bcum = Covariance 0 0 0 0
                , zcl2 = Variance 0 0 0
+               , zcl224 = Variance 0 0 0
+               , covl2l224 = Covariance 0 0 0 0
+               , nl2 = Variance 0 0 0
                , ener = Variance 0 0 0
                }
   mappend l r = ACC { mag = mag l <> mag r
@@ -160,7 +167,10 @@ instance Monoid ACC where
                     , mag4 = mag4 l <> mag4 r
                     , bcum = bcum l <> bcum r
                     , zcl2 = zcl2 l <> zcl2 r
+                    , zcl224 = zcl224 l <> zcl224 r
+                    , covl2l224 = covl2l224 l <> covl2l224 r
                     , ener = ener l <> ener r
+                    , nl2 = nl2 l <> nl2 r
                     }
 
 newtype GSACC = GSACC (M.Map GSParams ACC)
@@ -190,27 +200,45 @@ recordsToACC :: GSIO.GSRecord -> GSACC
 recordsToACC rc =
   let !pars = recordsParameters rc
       !m = GSIO.magnetization $ GSIO.observables rc
+      !en = (GSIO.energy $ GSIO.observables rc) / (fromIntegral nn)
+      !nn = (linear_size pars)^(dimensions pars)
       !zrs = IM.toList $ GSIO.zeroclusters $ GSIO.observables rc
       -- | lattice size
-      !nn = (linear_size pars)^(dimensions pars)
-      !numclusters = length zrs
+      !numclusters = sum $ map snd zrs
+      !zrswithoutbiggest = 
+        let accnts = IM.toAscList $ GSIO.zeroclusters $ GSIO.observables rc
+         in if null accnts
+              then []
+              else init accnts
+      !numclusterswbgst = sum $ map snd zrswithoutbiggest
+-- | l2, l4 and mean cluster size are referenced in 
+-- http://link.aps.org/doi/10.1103/PhysRevE.72.016101
       !l2 = if numclusters == 0
               then 0
               else (foldl'
                 (\ac (s, n) -> ac + (fromIntegral n) * ((fromIntegral s)^2))
-                0 zrs) / ((fromIntegral nn)^2) / (fromIntegral numclusters)
+                0 zrs) / ((fromIntegral nn)^2) * (fromIntegral numclusters)
       !l4 = if numclusters == 0
               then 0
               else (foldl'
                 (\ac (s, n) -> ac + (fromIntegral n) * ((fromIntegral s)^4))
                 0 zrs) / ((fromIntegral nn)^4) / (fromIntegral numclusters)
-      !en = GSIO.energy $ GSIO.observables rc
+      !l224 = 3 * l2^2 - 2 * l4
+      !zmcs = if numclusterswbgst <= 0
+              then 0
+              else (foldl'
+                (\ac (s, n) -> ac + (fromIntegral n) * ((fromIntegral s)^2))
+                0 zrswithoutbiggest) / 
+                  (fromIntegral nn) / (fromIntegral numclusters)
    in GSACC (M.singleton pars (ACC { mag = Variance 1 m 0
                                    , mag2 = Variance 1 (m^2) 0
                                    , mag4 = Variance 1 (m^4) 0
                                    , bcum = Covariance 1 (m^2) (m^4) 0
-                                   , zcl2 = Variance 1 l2 0
                                    , ener = Variance 1 en 0
+                                   , zcl2 = Variance 1 l2 0
+                                   , zcl224 = Variance 1 l224 0
+                                   , covl2l224 = Covariance 1 l2 l224 0
+                                   , nl2 = Variance 1 zmcs 0
                                    }))
 
 
@@ -255,10 +283,35 @@ m4'=  ─────
                             Right var'
             }
 
+getQ :: Variance Double -> Variance Double -> Covariance Double -> Stats
+getQ (Variance na l2 d2) (Variance nb l224 d224) covq =
+  let varnum =  case (var (getVariance (Variance na l2 d2))) of
+                Left _ -> -1
+                Right var2 -> var2
+      varden =  case (var $ getVariance (Variance nb l224 l224)) of
+                Left _ -> -1
+                Right var224 -> var224 
+      cov = getCovariance covq
+      tbx2 = (2*l2) / l224
+      tbx4 = negate $ l2^2/ (l224^2)
+      var' = (abs tbx2)^2 * varnum + (abs tbx4)^2 * varnum + 2 * tbx2 * tbx4 * cov
+   in Stats { n = na
+            , average = l2^2 / l224
+            , var = if varnum == -1 || varden == -1
+                          then 
+                            Left na
+                          else 
+                            Right var'
+            }
+
 data Observables = Observables
-  { magnetization  :: Stats
+  { energy :: Stats
+  , magnetization  :: Stats
   , binderCumulant :: Stats
   , l2             :: Stats
+  , qq :: Stats
+-- | mean cluster size of zeros
+  , meanClusterSize :: Stats
   } deriving (Show, Eq, GEN.Generic)
 instance AE.FromJSON Observables
 instance AE.ToJSON Observables
@@ -283,14 +336,21 @@ accumulateRecords = Fold.Fold step begin done
     done (GSACC gaccu) =
       M.foldlWithKey
       (\(GSStats gsac) par x ->
-        let m = mag x
+        let en = ener x
+            m = mag x
             m2 = mag2 x
             m4 = mag4 x
             bc = bcum x
             l2 = zcl2 x
-         in GSStats (M.insert par (Observables { magnetization = getVariance m
+            l224 = zcl224 x
+            covQ = covl2l224 x
+            mcs = nl2 x
+         in GSStats (M.insert par (Observables { energy = getVariance en 
+                                               , magnetization = getVariance m
                                                , binderCumulant = getBinderCumulant m2 m4 bc
                                                , l2 = getVariance l2
+                                               , qq = getQ l2 l224 covQ
+                                               , meanClusterSize = getVariance mcs
                                                }) gsac))
          (GSStats M.empty) gaccu
 
@@ -311,6 +371,7 @@ printStats stats outfile = do
   I.writeFile outfile
     $ encodeToLazyText stats
   putStrLn $ "printed summed json in " ++ outfile ++ "\n"
+  printRStats stats outfile
 
 readStats :: String -> IO (Either String GSStats)
 readStats sumfilename = do
@@ -320,6 +381,61 @@ readStats sumfilename = do
 rparse :: AE.ToJSON a => a -> String
 rparse = TXL.unpack . encodeToLazyText
 
+data RRow = RRow
+  { l       :: !Int
+  , d        :: !Int
+  , delta             :: !Double
+  , ρ :: !Double
+  , disorder     :: !String
+  , realizations :: !Int
+  , energy_mean :: !Double
+  , energy_se :: !Double
+  , mag_mean :: !Double
+  , mag_se :: !Double
+  , binder_mean :: !Double
+  , binder_se :: !Double
+  , l2_mean :: !Double
+  , l2_se :: !Double
+  , qq_mean :: !Double
+  , qq_se :: !Double
+    , mcs_mean :: !Double
+    , mcs_se :: !Double
+  } deriving (Show, Ord, Eq, GEN.Generic)
+instance AE.FromJSON RRow
+instance AE.ToJSON RRow
+
+gsParamsToR :: GSParams -> Observables -> RRow
+gsParamsToR (GSParams l d delta rho distype)
+  (Observables ener mag bind l2 qq mcs) =
+  let delta' = fromRational delta
+      rho' = fromRational rho
+      realizations = n mag
+      enerm = average ener
+      enerse = fromRight $ stdErr ener
+      magm = average mag
+      magse = fromRight $ stdErr mag
+      bindm = average bind
+      bindse = fromRight $ stdErr bind
+      l2m = average l2
+      l2se = fromRight $ stdErr l2
+      qqm = average qq 
+      qqse = fromRight $ stdErr qq
+      mcsm = average mcs
+      mcsse = fromRight $ stdErr mcs
+   in RRow l d delta' rho' distype realizations 
+       enerm enerse magm magse bindm bindse 
+       l2m l2se
+       qqm qqse
+       mcsm mcsse
+
+printRStats :: GSStats -> String -> IO ()
+printRStats stats outfile = do
+  let rows = fmap (\(par, obs) -> gsParamsToR par obs) 
+           $ toList stats
+  let outfile' = head (splitOn "." outfile) ++ "RStats.json"
+  I.writeFile outfile'
+    $ encodeToLazyText rows
+  putStrLn $ "printed json for R consumption " ++ outfile' ++ "\n"
 
 plotStats :: String -> String -> IO ()
 plotStats statsfile fieldname = do
@@ -331,7 +447,9 @@ plotStats statsfile fieldname = do
                 "binder" -> binderCumulant
                 "l2" -> l2
                 otherwise -> magnetization
-      xs = rparse (fmap (fromRational . field) $ keys stats :: [Double])
+      xs = rparse (fmap (\lab -> 
+        (linear_size lab ,fromRational $ field lab)
+                        ) $ keys stats :: [(Int,Double)])
       values = rparse (fmap (\(_,obs) -> 
                                 let x = field' obs
                                     m = average x
@@ -359,6 +477,7 @@ plotStats statsfile fieldname = do
              highs = valuesList[,"ymax"]
              print("means")
              print(means)
+             names(xs) = ("L,Δ")
              fvm = data.frame(xs,means,lows,highs)
              print("fvm")
              print(fvm)

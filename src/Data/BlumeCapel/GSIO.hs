@@ -239,4 +239,5 @@ runJob jobfilename = do
 readResults :: String -> IO ([Either String GSRecord])
 readResults resultsfilename = do
   bytes <- BCL.readFile resultsfilename
-  return $ fmap AE.eitherDecode $ BCL.lines bytes
+  let out = fmap AE.eitherDecode $ BCL.lines bytes
+  return out
