@@ -1,14 +1,14 @@
 { "_l" : 32
 , "_d"   : 2
 , "_delta": 
-  { "rangefrom": 2.0
-  , "rangeto": 2.0
-  , "rangestep": 0.1
+  { "rangefrom": {"numerator":196,"denominator":100}
+  , "rangeto": {"numerator":203,"denominator":100}
+  , "rangestep": {"numerator":1,"denominator":100}
   }
 , "_disorder": 
-  { "rangefrom": 0.5
-  , "rangeto": 0.5
-  , "rangestep": 0.1
+  { "rangefrom": {"numerator":1,"denominator":2}
+  , "rangeto": {"numerator":1,"denominator":2}
+  , "rangestep": {"numerator":1,"denominator":100}
   }
 , "_disorderType" : "unimodal"
 , "_realizations" : 1

@@ -74,9 +74,9 @@ import           Data.PRNG.MTRNG
 default (Int,Rational,Double)
 
 data ParamRange = ParamRange
-  { rangefrom :: Double
-  , rangeto   :: Double
-  , rangestep :: Double
+  { rangefrom :: Rational
+  , rangeto   :: Rational
+  , rangestep :: Rational
   } deriving (Show, Generic)
 instance AE.FromJSON ParamRange
 instance AE.ToJSON ParamRange

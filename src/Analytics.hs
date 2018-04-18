@@ -23,22 +23,13 @@ main = do
       return 1
     False -> do
       putStrLn "Reading results file \n"
-      let instruction = args !! 0
-      case instruction of 
-        "sum" -> do
-          let resultsfile = args !! 1
-              outfile = args !! 2
-          putStrLn $ "Summing results" ++ show resultsfile
-          gss <- GSIO.readResults resultsfile
-          let stats = ST.gsStats gss
-          putStrLn $ show $ ST.size stats
-          putStrLn $ GSIO.getJson stats
-          ST.printStats stats outfile
-          putStrLn "The End!"
-        "plot" -> do
-           let sumfile = args !! 1
-               observable = args !! 2
-           stats <- ST.readStats sumfile
-           putStrLn $ "plotting " ++ show observable
-           ST.plotStats sumfile observable
+      let resultsfile = args !! 0
+          outfile = args !! 1
+      putStrLn $ "Summing results" ++ show resultsfile
+      gss <- GSIO.readResults resultsfile
+      let stats = ST.gsStats gss
+      putStrLn $ show $ ST.size stats
+      putStrLn $ GSIO.getJson stats
+      ST.printStats stats outfile
+      putStrLn "The End!"
       return 0

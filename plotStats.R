@@ -1,9 +1,20 @@
 rm(list=ls())
 require(ggplot2)
 require(jsonlite)
-dataset = "../results/p05/wideRStats"
+
+config = list ()
+
+config$fields = c("energy","mag","binder","l2","mcs","qq")
+names(config$fields) = c("Energy"
+                         , "Magnetization"
+                         , "Binder Cumulant - U"
+                         , "l2", "Mean zero-cluster size (without the largest) - MCS"
+                         , "Q")
+
+dataset = "../results/bimodal/p07/bimRStats"
 filename = toString(paste(c(dataset,".json"),collapse=''))
 gss = fromJSON(filename)
+plot
 #gss = fromJSON("RStats.json")
 #gss = fromJSON("scanRStats.json")
 #gss = fromJSON("bigRStats.json")
@@ -12,8 +23,8 @@ gss = fromJSON(filename)
 #field = "mag"
 #field = "binder"
 #field = "l2"
-#field = "mcs"
-field = "qq"
+field = "mcs"
+#field = "qq"
 meanColumn = paste(c(field, "_mean"), collapse='')
 seColumn = paste(c(field, "_se"), collapse='')
 lowColumn = paste(c(field,"_low"),collapse='')
@@ -27,10 +38,13 @@ print (reals)
 #geom_errorbar(aes(color=factor(ρ),ymin=gss[lowColumn], ymax=gss[highColumn]),width=.001) +
 #ggtitle(paste(c("Bimodal"," Δ=2"," realizations=",reals),collapse='')) +
 theplot = ggplot(gss,aes(x=delta,y=gss[meanColumn],group=l,color=l)) +
-geom_point(aes(colour=factor(l),shape=factor(l))) +
-geom_errorbar(aes(colour=factor(l),ymin=gss[lowColumn], ymax=gss[highColumn]),width=.001) +
+geom_point(aes(colour=factor(l))) +
+geom_errorbar(aes(colour=factor(l),ymin=gss[lowColumn], ymax=gss[highColumn])) +
 ggtitle(paste(c("Unimodal"," D=2"),collapse='')) +
-labs(x="Δ",y=field, legend="L") 
+#ylim(-0.4,0.4) +
+labs(x="Δ",y=field, legend="L")
+#labs(x="Δ",y="Mean zero-cluster size (without the largest)", legend="L")
+
 print(theplot)
-exportname = paste(c(filename, "_", field, ".svg"),collapse='')
+exportname = paste(c(filename, "_", field, ".png"),collapse='')
 ggsave(filename=exportname,plot=theplot)

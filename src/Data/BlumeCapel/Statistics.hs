@@ -26,7 +26,6 @@ module Data.BlumeCapel.Statistics
   , gsStats
   , printStats
   , readStats
-  , plotStats
   , size
   ) where
 
@@ -51,9 +50,6 @@ import qualified Data.Map.Strict          as M
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Ratio
-
-import qualified Language.R.Instance      as R
-import qualified Language.R.QQ            as HR
 
 import qualified Data.BlumeCapel          as BC
 import qualified Data.BlumeCapel.GSIO     as GSIO
@@ -216,20 +212,19 @@ recordsToACC rc =
       !l2 = if numclusters == 0
               then 0
               else (foldl'
-                (\ac (s, n) -> ac + (fromIntegral n) * ((fromIntegral s)^2))
-                0 zrs) / ((fromIntegral nn)^2) * (fromIntegral numclusters)
+                (\ac (s, n) -> ac + (fromIntegral n) * (fromIntegral s / fromIntegral nn)^2)
+                0 zrs) / fromIntegral numclusters
       !l4 = if numclusters == 0
               then 0
               else (foldl'
-                (\ac (s, n) -> ac + (fromIntegral n) * ((fromIntegral s)^4))
-                0 zrs) / ((fromIntegral nn)^4) / (fromIntegral numclusters)
+                (\ac (s, n) -> ac + (fromIntegral n) * (fromIntegral s/ fromIntegral nn)^4)
+                0 zrs) / fromIntegral numclusters
       !l224 = 3 * l2^2 - 2 * l4
       !zmcs = if numclusterswbgst <= 0
               then 0
               else (foldl'
-                (\ac (s, n) -> ac + (fromIntegral n) * ((fromIntegral s)^2))
-                0 zrswithoutbiggest) / 
-                  (fromIntegral nn) / (fromIntegral numclusters)
+                (\ac (s, n) -> ac + (fromIntegral n) * (fromIntegral s)^2)
+                0 zrswithoutbiggest) / (fromIntegral numclusterswbgst) / (fromIntegral nn)
    in GSACC (M.singleton pars (ACC { mag = Variance 1 m 0
                                    , mag2 = Variance 1 (m^2) 0
                                    , mag4 = Variance 1 (m^4) 0
@@ -436,54 +431,3 @@ printRStats stats outfile = do
   I.writeFile outfile'
     $ encodeToLazyText rows
   putStrLn $ "printed json for R consumption " ++ outfile' ++ "\n"
-
-plotStats :: String -> String -> IO ()
-plotStats statsfile fieldname = do
-  stats <- fmap fromRight $ readStats statsfile
-  let numberofpoints = size stats
-      label = mconcat $ map encodeToLazyText (keys stats)
-      field' = case fieldname of
-                "mag" -> magnetization
-                "binder" -> binderCumulant
-                "l2" -> l2
-                otherwise -> magnetization
-      xs = rparse (fmap (\lab -> 
-        (linear_size lab ,fromRational $ field lab)
-                        ) $ keys stats :: [(Int,Double)])
-      values = rparse (fmap (\(_,obs) -> 
-                                let x = field' obs
-                                    m = average x
-                                    se = fromRight $ stdErr x
-                                 in (m,se)
-                             ) $ toList stats :: [(Double,Double)])
-  {-putStrLn $ GSIO.getJson label-}
-  R.withEmbeddedR R.defaultConfig $ do
-    R.runRegion $ do
-      [HR.r| require(ggplot2)
-             require(rjson)
-             values = fromJSON(values_hs)
-             xs = fromJSON(xs_hs)
-             print(values)
-             valuesList = t(matrix(unlist(lapply(values, function(x){
-                 de = x[[2]]
-                 out = c(x[[1]],x[[1]] - (1.96 * de),x[[1]] + (1.96 * de))
-                 return(out)
-             })),ncol=length(xs),nrow=3))
-             colnames(valuesList)=c("mean","ymin","ymax")
-             print("valuesList")
-             print(valuesList)
-             means = valuesList[,"mean"]
-             lows = valuesList[,"ymin"]
-             highs = valuesList[,"ymax"]
-             print("means")
-             print(means)
-             names(xs) = ("L,Δ")
-             fvm = data.frame(xs,means,lows,highs)
-             print("fvm")
-             print(fvm)
-             theplot = ggplot(fvm,aes(x=xs,y=means)) +
-             geom_point() +
-             geom_errorbar(aes(ymin=lows, ymax=highs),width=.001)
-             ggsave(filename="fieldvsValues.svg",plot=theplot)
-        |]
-      return ()
