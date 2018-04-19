@@ -1,50 +1,61 @@
 rm(list=ls())
 require(ggplot2)
 require(jsonlite)
+library(tools)
+
+fields = list ()
+fields = c("L", "realizations","ρ", "delta", "energy","mag","binder","l2","mcs","qq")
+names(fields) = c( "L"
+                 , "Realizations"
+                 , "Disorder"
+                 , "Δ"
+                 , "Energy"
+                 , "Magnetization"
+                 , "Binder Cumulant - U"
+                 , "l2"
+                 , "Mean zero-cluster size (without the largest) - MCS"
+                 , "Q"
+                 )
+
+filename = "../results/bimodal/p07/bimRStats.json"
 
 config = list ()
 
-config$fields = c("energy","mag","binder","l2","mcs","qq")
-names(config$fields) = c("Energy"
-                         , "Magnetization"
-                         , "Binder Cumulant - U"
-                         , "l2", "Mean zero-cluster size (without the largest) - MCS"
-                         , "Q")
+plotGS = function (filename){
+  dataname = basename(file_path_sans_ext(filename))
+  datadir = dirname(filename)
+  configfile = paste(c(datadir,"/",dataname, ".plot"),collapse='')
+  print(configfile)
+  config = fromJSON(configfile)
+  print(config)
+  xaxis = config$xaxis
+  field = config$yaxis
+  xaxisname = names(fields)[fields == xaxis]
+  yaxisname = names(fields)[fields == field]
+  gss = fromJSON(filename)
+  order(print(gss[config$groupBy]))
+  meanColumn = paste(c(field, "_mean"), collapse='')
+  seColumn = paste(c(field, "_se"), collapse='')
+  lowColumn = paste(c(field,"_low"),collapse='')
+  highColumn = paste(c(field,"_high"),collapse='')
+  gss[lowColumn] = gss[meanColumn] - 1.96 * gss[seColumn]
+  gss[highColumn] = gss[meanColumn] + 1.96 * gss[seColumn]
+  theplot = ggplot(gss,aes(x=gss[xaxis],y=gss[meanColumn])) +
+  geom_point(aes(color=factor(l))) +
+  geom_errorbar(aes(colour=factor(l),ymin=gss[lowColumn], ymax=gss[highColumn])) +
+  ggtitle(config$title) +
+  labs(x=xaxisname,y=yaxisname)
+  print(theplot)
+  exportname = paste(c(datadir,"/",dataname, "_", xaxis,"_vs_", field, ".png"),collapse='')
+  ggsave(filename=exportname,plot=theplot)
+}
 
-dataset = "../results/bimodal/p07/bimRStats"
-filename = toString(paste(c(dataset,".json"),collapse=''))
-gss = fromJSON(filename)
-plot
-#gss = fromJSON("RStats.json")
-#gss = fromJSON("scanRStats.json")
-#gss = fromJSON("bigRStats.json")
-#gss = fromJSON("binRStats.json")
-#field = "energy"
-#field = "mag"
-#field = "binder"
-#field = "l2"
-field = "mcs"
-#field = "qq"
-meanColumn = paste(c(field, "_mean"), collapse='')
-seColumn = paste(c(field, "_se"), collapse='')
-lowColumn = paste(c(field,"_low"),collapse='')
-highColumn = paste(c(field,"_high"),collapse='')
-gss[lowColumn] = gss[meanColumn] - 1.96 * gss[seColumn]
-gss[highColumn] = gss[meanColumn] + 1.96 * gss[seColumn]
-reals = gss$realizations[1]
-print (reals)
-#theplot = ggplot(gss,aes(x=delta,y=gss[meanColumn],group=ρ,color=ρ)) +
-#geom_point(aes(colour=factor(ρ),shape=factor(ρ))) +
-#geom_errorbar(aes(color=factor(ρ),ymin=gss[lowColumn], ymax=gss[highColumn]),width=.001) +
-#ggtitle(paste(c("Bimodal"," Δ=2"," realizations=",reals),collapse='')) +
-theplot = ggplot(gss,aes(x=delta,y=gss[meanColumn],group=l,color=l)) +
-geom_point(aes(colour=factor(l))) +
-geom_errorbar(aes(colour=factor(l),ymin=gss[lowColumn], ymax=gss[highColumn])) +
-ggtitle(paste(c("Unimodal"," D=2"),collapse='')) +
-#ylim(-0.4,0.4) +
-labs(x="Δ",y=field, legend="L")
-#labs(x="Δ",y="Mean zero-cluster size (without the largest)", legend="L")
+toCSV = function (filename) {
+  gss = fromJSON(filename)
+  datadir = dirname(filename)
+  dataname = basename(file_path_sans_ext(filename))
+  csvfile = paste(c(datadir,"/",dataname, ".csv"),collapse='')
+  write.csv(gss, file = csvfile)
+}
 
-print(theplot)
-exportname = paste(c(filename, "_", field, ".png"),collapse='')
-ggsave(filename=exportname,plot=theplot)
+plotGS(filename)

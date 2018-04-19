@@ -13,5 +13,6 @@
 , "_disorderType" : "unimodal"
 , "_realizations" : 1
 , "_seedofSeeds" : 149
+, "_resultdir"    : "../results"
 , "_resultfile"    : "results.json"
 }

@@ -88,6 +88,7 @@ data JobArguments = JobArguments
   , _disorderType :: String
   , _realizations :: Int
   , _seedofSeeds  :: Int
+  , _resultdir   :: String
   , _resultfile   :: String
   } deriving (Show, Generic)
 instance AE.FromJSON JobArguments
@@ -205,7 +206,7 @@ runJob jobfilename = do
               putStrLn "running"
               putStrLn $ "total: " ++ (show $ length pars)
               currentTime <- Time.getCurrentTime
-              let file = (show currentTime) ++ "_" ++ _resultfile args
+              let file = (_resultdir args) ++ "/" ++ (show currentTime) ++ "_" ++ _resultfile args
               buffer <- newTVarIO (0,0,0,C.empty)
                 :: IO (TVar (Int, SP.COff, SP.COff, C.ByteString))
               resfd <- PIO.createFile file PF.ownerModes
