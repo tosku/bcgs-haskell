@@ -18,6 +18,7 @@ Portability : POSIX
 {-# LANGUAGE QuasiQuotes           #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE BangPatterns #-}
 
 
 module Data.BlumeCapel.Statistics
@@ -48,6 +49,7 @@ import           Data.List
 import           Data.List.Split
 import qualified Data.Map.Strict          as M
 import           Data.Maybe
+import           Data.Semigroup
 import           Data.Monoid
 import           Data.Ratio
 
@@ -79,9 +81,8 @@ instance AE.ToJSON GSParams
 -- | Numerical stable aggregator for variance
 data Variance a = Variance !Int !a !a
   deriving (Show, Eq, GEN.Generic)
-instance Fractional a => Monoid (Variance a) where
-  mempty = Variance 0 0 0
-  mappend (Variance count mean m2) (Variance 1 newValue _) =
+instance Fractional a => Semigroup (Variance a) where
+  (<>) (Variance count mean m2) (Variance 1 newValue _) =
     Variance count' mean' m2'
       where count' = count + 1
             n' = fromIntegral count'
@@ -89,7 +90,7 @@ instance Fractional a => Monoid (Variance a) where
             mean' = mean + delta / n'
             delta2 = newValue - mean'
             m2' = m2 + delta * delta2
-  mappend (Variance count_a avg_a m2a) (Variance count_b avg_b m2b) =
+  (<>) (Variance count_a avg_a m2a) (Variance count_b avg_b m2b) =
     Variance count' mean' m2'
       where count' = count_a + count_b
             count_a' = fromIntegral count_a
@@ -97,6 +98,8 @@ instance Fractional a => Monoid (Variance a) where
             delta = avg_b - avg_a
             mean' = (avg_a * count_a' + avg_b * count_b') / (count_a' + count_b')
             m2' = m2a + m2b + delta^2 * count_a' * count_b' / (count_a' + count_b')
+instance Fractional a => Monoid (Variance a) where
+  mempty = Variance 0 0 0
 
 getMean :: Variance Double -> Double
 getMean (Variance _ m _) = m
@@ -120,8 +123,9 @@ data Covariance a = Covariance !Int !a !a !a
   deriving (Show, Eq, GEN.Generic)
 instance Fractional a => Monoid (Covariance a) where
   mempty = Covariance 0 0 0 0
+instance Fractional a => Semigroup (Covariance a) where
   -- | https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-  mappend (Covariance na meanxa meanya cva) (Covariance nb meanxb meanyb cvb) =
+  (<>) (Covariance na meanxa meanya cva) (Covariance nb meanxb meanyb cvb) =
     Covariance n meanx meany cv
       where n = na + nb
             n' = fromIntegral n
@@ -158,7 +162,8 @@ instance Monoid ACC where
                , nl2 = Variance 0 0 0
                , ener = Variance 0 0 0
                }
-  mappend l r = ACC { mag = mag l <> mag r
+instance Semigroup ACC where
+  (<>) l r = ACC { mag = mag l <> mag r
                     , mag2 = mag2 l <> mag2 r
                     , mag4 = mag4 l <> mag4 r
                     , bcum = bcum l <> bcum r
@@ -173,7 +178,8 @@ newtype GSACC = GSACC (M.Map GSParams ACC)
   deriving (Show, Eq, GEN.Generic)
 instance Monoid GSACC where
   mempty = GSACC M.empty
-  mappend (GSACC l) (GSACC r) = GSACC $
+instance Semigroup GSACC where
+  (<>) (GSACC l) (GSACC r) = GSACC $
     M.unionWith (<>) l r
 
 data Stats = Stats { n       :: !Int
@@ -195,9 +201,9 @@ recordsParameters gr = GSParams
 recordsToACC :: GSIO.GSRecord -> GSACC
 recordsToACC rc =
   let !pars = recordsParameters rc
-      !m = GSIO.magnetization $ GSIO.observables rc
-      !en = (GSIO.energy $ GSIO.observables rc) / (fromIntegral nn)
       !nn = (linear_size pars)^(dimensions pars)
+      !m = GSIO.magnetization $ GSIO.observables rc
+      !en = GSIO.energy $ GSIO.observables rc
       !zrs = IM.toList $ GSIO.zeroclusters $ GSIO.observables rc
       -- | lattice size
       !numclusters = sum $ map snd zrs

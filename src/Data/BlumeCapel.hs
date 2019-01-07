@@ -33,11 +33,14 @@ module Data.BlumeCapel
     , fromTuple
     , BondDisorder (..)
     , DisorderStrength
-    , Delta -- ^ Crystal field strength Double
+    -- * Crystal field strength Double
+    , Delta 
     , SpinOne (..)
     , Spin (..)
-    , RBBC (..) -- ^ Random Bond Blume Capel
-    , RBBCReplica (..) -- ^ Random Bond Blume Capel
+    -- * Random Bond Blume Capel
+    , RBBC (..) 
+    -- * Random Bond Blume Capel
+    , RBBCReplica (..) 
     , RandomBond (..)
     , Realization (..)
     , Replica (..)
@@ -130,7 +133,7 @@ dichotomousJs es s r δ = do
       jStrong = 2 / (2 - r')
       s' = s 
         + (fromIntegral $ numerator r) 
-        + (fromIntegral $ numerator δ) -- ^ (s,r,δ) should define the realization
+        + (fromIntegral $ numerator δ) -- (s,r,δ) should define the realization
       n = length es
       strongjs = IM.fromList $ zip [1..n] (repeat jStrong)
       weakindxs = sample (getRNG s' :: MTRNG) (quot n 2) [1..n]
@@ -142,7 +145,7 @@ unimodalJs es s r δ =
   let n = length es
       newseed = s 
         + (fromIntegral $ numerator r) 
-        + (fromIntegral $ numerator δ) -- ^ (s,r,δ) should define the realization
+        + (fromIntegral $ numerator δ) -- (s,r,δ) should define the realization
       rng = getRNG newseed :: MTRNG
       μ = 1
       σ = fromRational r

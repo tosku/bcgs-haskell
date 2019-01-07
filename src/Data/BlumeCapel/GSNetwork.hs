@@ -14,7 +14,6 @@ Portability : POSIX
 {-# LANGUAGE OverloadedStrings, DeriveGeneric, DeriveAnyClass #-}
 {-# LANGUAGE BangPatterns #-}
 
-
 module Data.BlumeCapel.GSNetwork
   ( weights
   , gsBCCapacities
@@ -38,6 +37,7 @@ import Data.BlumeCapel
 
 import Data.Graph.AdjacencyList
 import Data.Graph.AdjacencyList.Network
+import Data.Graph.AdjacencyList.PushRelabel.Internal
 import Data.Graph.AdjacencyList.PushRelabel.Pure
 
 network'RBBC :: RBBC -> Network 
@@ -106,7 +106,7 @@ netEdgeCaps r =
                               True -> ((fromTuple (s,fromIntegral v),abs(w)):(fst ac), snd ac)
                               False -> (fst ac, (fromTuple (fromIntegral v,t),w):(snd ac))
               ) ([],[]) vs :: ([(Edge,Capacity)],[(Edge,Capacity)])
-   in (M.toList js ++ sourceEdges) ++ targetEdges -- ^ Source edges ++ Realization edges ++ Target edges
+   in (M.toList js ++ sourceEdges) ++ targetEdges -- Source edges ++ Realization edges ++ Target edges
 
 sourceTargetEdges :: RBBC -> ([Edge],[Edge])
 sourceTargetEdges r = 
@@ -163,4 +163,3 @@ groundState real =
    in GroundState { replica = replica'RBBC real conf
                   , cutEnergy = cen
                   }
-

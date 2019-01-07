@@ -8,6 +8,8 @@ Stability   : experimental
 Portability : POSIX
 |-}
 
+{-# LANGUAGE BangPatterns #-}
+
 module Test.BlumeCapel.GSNetwork where
 
 import TestHS
@@ -67,12 +69,13 @@ test1 = do
 test2 :: Test
 test2 = do
   let name = "Integration Test: \n Cut Energy equals realizations Hamiltonian 100 realizations L20 d2"
-      rng = getRNG 13 :: MTRNG
+      rng = getRNG 139 :: MTRNG
       seeds = map (floor . ((*) 10000)) $ uniformSample rng 100
       gss = map (getGS 20 2) seeds
       out = filter (not . testGS) gss
   case null out of
     True -> testPassed name "passed!"
+    {-True -> testPassed name ("passed!" ++ show ( map cutEnergy gss) ++ show ( map (energy . replica) gss) )-}
     False -> testFailed name $ (,) ("error:") (show out)
   where
     testGS :: GroundState -> Bool

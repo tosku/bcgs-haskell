@@ -3,15 +3,16 @@ extra-package-dbs: []
 packages:
 - .
 #- ../../graph/
-resolver: lts-10.3
+resolver: lts-13.1
 extra-deps:
 - git: https://github.com/tosku/prng.git
   commit: 42bdc6a212e89238c649e144b322e7fa6ac9ca03
 - git: https://github.com/tosku/graph.git
-  commit: 0ba2a49f9c23a092d7f4bc815a21f46ba632e07c
+  commit: ebe8bd5f1d39ddb41eb1e22d65d149132f388f2a
 - git: https://github.com/tosku/tesths.git
-  commit: 0fb1ba49641e87b843556cd1441240ef602fcf2b
+  commit: a2927de94ead1a6f4235cbc202f435a575cac03a
 - Histogram-0.1.0.2
 - Unique-0.4.7.2
 - natural-numbers-0.1.2.0
+- either-unwrap-1.1
 allow-newer: true
